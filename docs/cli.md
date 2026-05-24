@@ -664,7 +664,7 @@ obora chat --show-run <executionId> [--session <id>]
 - `/details <executionId>` shows the recorded step outputs, tools, artifacts, decisions, and issues for a prior workflow result in the current session.
 - `/session` shows the current session id, project, tags, selected workflow, mode, provider/model, and last run metadata.
 - `/project` shows the current session project root, and `/project <path>` changes it for subsequent workflow discovery.
-- `/sessions` shows recent persisted chat sessions, and `/sessions release` filters the list by tag.
+- `/sessions` shows recent persisted chat sessions, `/sessions release` filters the list by tag, and `/session 1` or `/session <id>` switches to a listed or known session.
 - `/tags` shows the current session tags, `/tags release,qa` updates them, and `/tags --clear` removes them.
 - `/help` prints available chat commands.
 - `/exit` or `/quit` closes the chat session.

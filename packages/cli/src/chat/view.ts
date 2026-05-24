@@ -230,7 +230,8 @@ const renderTranscript = (state: ChatSessionState, width: number): ReadonlyArray
 const renderPrompt = (state: ChatSessionState, width: number): ReadonlyArray<string> => {
   const prompt = `› ${state.workflowLocator ? "Type a task for this workflow" : "Select /workflow <name> first"}`;
   const primaryCommands = "/run <task>  /workflows  /workflow 1  /run #1 <task>  /details <runId>";
-  const secondaryCommands = "/session  /project  /sessions  /tags  /workflow <name>  /help  /exit";
+  const secondaryCommands =
+    "/session  /session 1  /project  /sessions  /tags  /workflow <name>  /help  /exit";
   const footer = `${state.modelName ?? "default"}  ·  ${compactPath(state.cwd, Math.max(12, width - 28))}`;
   return [
     "",

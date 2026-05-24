@@ -54,7 +54,7 @@ interface ChatTurnResult {
 }
 
 const chatHelp =
-  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /project [path] shows or changes the session project root, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /details <executionId> shows step results, /session shows current session metadata, /sessions [tag] lists recent sessions, /tags [a,b] shows or updates session tags, /exit quits.";
+  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /project [path] shows or changes the session project root, /sessions [tag] lists recent sessions, /session 1 or /session <id> switches sessions, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /details <executionId> shows step results, /session shows current session metadata, /tags [a,b] shows or updates session tags, /exit quits.";
 
 const isExitCommand = (input: string): boolean => input === "/exit" || input === "/quit";
 
@@ -69,6 +69,9 @@ const tagsTargetFromCommand = (input: string): string | undefined =>
 
 const sessionsTagFromCommand = (input: string): string | undefined =>
   input.startsWith("/sessions ") ? input.slice("/sessions ".length).trim() : undefined;
+
+const sessionTargetFromCommand = (input: string): string | undefined =>
+  input.startsWith("/session ") ? input.slice("/session ".length).trim() : undefined;
 
 const projectTargetFromCommand = (input: string): string | undefined =>
   input.startsWith("/project ") ? input.slice("/project ".length).trim() : undefined;
@@ -241,6 +244,40 @@ const withSessionTags = (
   tags,
 });
 
+const withSessionChoices = (
+  state: ChatSessionState,
+  sessionChoices: ReadonlyArray<ChatSessionSummary>
+): ChatSessionState => ({
+  ...state,
+  sessionChoices,
+});
+
+const sessionChoiceIndexFromTarget = (target: string): number | undefined =>
+  /^\d+$/u.test(target) ? Number.parseInt(target, 10) - 1 : undefined;
+
+const sessionChoiceAt = (
+  state: ChatSessionState,
+  index: number
+): ChatSessionSummary | undefined =>
+  index >= 0 && state.sessionChoices ? state.sessionChoices[index] : undefined;
+
+const normalizeLoadedSessionState = ({
+  current,
+  loaded,
+  commandOptions,
+}: {
+  readonly current: ChatSessionState;
+  readonly loaded: ChatSessionState;
+  readonly commandOptions: ChatCommandOptions;
+}): ChatSessionState => ({
+  ...loaded,
+  cwd: current.cwd,
+  projectRoot: loaded.projectRoot ?? current.cwd,
+  dryRun: Boolean(commandOptions.dryRun),
+  ...(commandOptions.provider ? { providerName: commandOptions.provider } : {}),
+  ...(commandOptions.model ? { modelName: commandOptions.model } : {}),
+});
+
 const resolveProjectRootTarget = (state: ChatSessionState, target: string): string =>
   resolve(state.cwd, target);
 
@@ -262,14 +299,21 @@ const formatSessionSummaryLine = (summary: ChatSessionSummary): string =>
     summary.tags.length > 0 ? `tags ${summary.tags.join(",")}` : "untagged",
   ].join(" · ");
 
+const formatNumberedSessionSummaryLine = (
+  summary: ChatSessionSummary,
+  index: number
+): string => `${index + 1}. ${formatSessionSummaryLine(summary).slice(2)}`;
+
 const formatSessionListMessage = (
   summaries: ReadonlyArray<ChatSessionSummary>,
   tag: string | undefined
 ): string =>
   summaries.length > 0
-    ? [`Recent sessions${tag ? ` tagged ${tag}` : ""}:`, ...summaries.slice(0, 5).map(formatSessionSummaryLine)].join(
-        "\n"
-      )
+    ? [
+        `Recent sessions${tag ? ` tagged ${tag}` : ""}:`,
+        ...summaries.slice(0, 8).map(formatNumberedSessionSummaryLine),
+        "Use /session 1 to switch, or /session <id> to open a known session.",
+      ].join("\n")
     : `No chat sessions found${tag ? ` tagged ${tag}` : ""}.`;
 
 const formatSessionWorkflow = (state: ChatSessionState): string =>
@@ -464,6 +508,7 @@ export const handleChatInput = async ({
   runWorkflow,
   commandOptions,
   listSessions,
+  loadSession,
   listWorkflowLocators,
 }: {
   readonly input: string;
@@ -475,6 +520,7 @@ export const handleChatInput = async ({
   readonly runWorkflow: typeof runRun;
   readonly commandOptions: ChatCommandOptions;
   readonly listSessions?: (tag?: string) => Promise<ReadonlyArray<ChatSessionSummary>>;
+  readonly loadSession?: (sessionId: string) => Promise<ChatSessionState | undefined>;
   readonly listWorkflowLocators?: (
     scope?: WorkflowResolveScope,
     projectRoot?: string
@@ -520,7 +566,10 @@ export const handleChatInput = async ({
       ? listSessions(tag)
       : listChatSessionSummaries({ cwd: state.cwd, ...(tag ? { tag } : {}) }));
     return {
-      state: appendAssistant(state, formatSessionListMessage(summaries, tag)),
+      state: appendAssistant(
+        withSessionChoices(state, summaries.slice(0, 8)),
+        formatSessionListMessage(summaries, tag)
+      ),
       exit: false,
     };
   }
@@ -530,6 +579,37 @@ export const handleChatInput = async ({
       state: appendAssistant(state, formatSessionStatusMessage(state)),
       exit: false,
     };
+  }
+
+  const sessionTarget = sessionTargetFromCommand(trimmed);
+  if (sessionTarget !== undefined) {
+    const choiceIndex = sessionChoiceIndexFromTarget(sessionTarget);
+    const choice = choiceIndex === undefined ? undefined : sessionChoiceAt(state, choiceIndex);
+    if (choiceIndex !== undefined && !choice) {
+      return {
+        state: appendAssistant(
+          state,
+          "Session choice not found. Run /sessions first, then use /session 1."
+        ),
+        exit: false,
+      };
+    }
+    const targetSessionId = choice ? choice.sessionId : sessionTarget;
+    const loaded = await (loadSession
+      ? loadSession(targetSessionId)
+      : loadChatSessionState({ cwd: state.cwd, sessionId: targetSessionId }));
+    return loaded
+      ? {
+          state: appendAssistant(
+            normalizeLoadedSessionState({ current: state, loaded, commandOptions }),
+            `Switched to session ${targetSessionId}.`
+          ),
+          exit: false,
+        }
+      : {
+          state: appendAssistant(state, `Chat session not found: ${targetSessionId}`),
+          exit: false,
+        };
   }
 
   if (trimmed === "/project") {
@@ -681,6 +761,7 @@ const promptLoop = async ({
   runWorkflow,
   commandOptions,
   listSessions,
+  loadSession,
   listWorkflowLocators,
   persist,
 }: {
@@ -694,6 +775,7 @@ const promptLoop = async ({
   readonly runWorkflow: typeof runRun;
   readonly commandOptions: ChatCommandOptions;
   readonly listSessions: (tag?: string) => Promise<ReadonlyArray<ChatSessionSummary>>;
+  readonly loadSession: (sessionId: string) => Promise<ChatSessionState | undefined>;
   readonly listWorkflowLocators: (
     scope?: WorkflowResolveScope,
     projectRoot?: string
@@ -708,6 +790,7 @@ const promptLoop = async ({
     runWorkflow,
     commandOptions,
     listSessions,
+    loadSession,
     listWorkflowLocators,
   });
   tui.update(result.state);
@@ -722,6 +805,7 @@ const promptLoop = async ({
         runWorkflow,
         commandOptions,
         listSessions,
+        loadSession,
         listWorkflowLocators,
         persist,
       });
@@ -804,6 +888,12 @@ export const runChatSession = async (
       ...(tag ? { tag } : {}),
       ...(options.sessionStoreDir ? { storeDir: options.sessionStoreDir } : {}),
     });
+  const loadSession = (sessionId: string): Promise<ChatSessionState | undefined> =>
+    loadChatSessionState({
+      cwd: options.cwd,
+      sessionId,
+      ...(options.sessionStoreDir ? { storeDir: options.sessionStoreDir } : {}),
+    });
   const listWorkflowLocators = (
     scopeOverride?: WorkflowResolveScope,
     projectRootOverride?: string
@@ -837,6 +927,7 @@ export const runChatSession = async (
       runWorkflow,
       commandOptions: options.commandOptions,
       listSessions,
+      loadSession,
       listWorkflowLocators,
     });
     tui.update(result.state);
@@ -865,6 +956,7 @@ export const runChatSession = async (
     runWorkflow,
     commandOptions: options.commandOptions,
     listSessions,
+    loadSession,
     listWorkflowLocators,
     persist: (state) => saveSession(options.cwd, state, options.sessionStoreDir),
   })

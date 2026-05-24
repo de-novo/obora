@@ -567,6 +567,142 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("release-readiness");
   });
 
+  it("stores listed sessions as numbered choices and switches by number", async () => {
+    const loaded = createInitialChatState({
+      sessionId: "release-session",
+      cwd: "/repo/old",
+      projectRoot: "/repo/release",
+      tags: ["release"],
+      dryRun: false,
+      workflowTarget: "release-readiness",
+    });
+    const listSessions = vi.fn(async (_tag?: string) => [
+      {
+        sessionId: "release-session",
+        status: "ready" as const,
+        cwd: "/repo/old",
+        projectRoot: "/repo/release",
+        tags: ["release"],
+        workflowTarget: "release-readiness",
+        messageCount: 3,
+        updatedAt: "2026-05-24T00:00:00.000Z",
+      },
+    ]);
+    const loadSession = vi.fn(async (_sessionId: string) => loaded);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const listed = await handleChatInput({
+      input: "/sessions release",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true, provider: "openrouter", model: "openrouter/owl-alpha" },
+      listSessions,
+      loadSession,
+    });
+    const switched = await handleChatInput({
+      input: "/session 1",
+      state: listed.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true, provider: "openrouter", model: "openrouter/owl-alpha" },
+      listSessions,
+      loadSession,
+    });
+
+    expect(listed.state.sessionChoices?.map((session) => session.sessionId)).toEqual([
+      "release-session",
+    ]);
+    expect(listed.state.messages.at(-1)?.content).toContain("Use /session 1");
+    expect(loadSession).toHaveBeenCalledWith("release-session");
+    expect(switched.state.sessionId).toBe("release-session");
+    expect(switched.state.cwd).toBe("/repo");
+    expect(switched.state.projectRoot).toBe("/repo/release");
+    expect(switched.state.dryRun).toBe(true);
+    expect(switched.state.providerName).toBe("openrouter");
+    expect(switched.state.modelName).toBe("openrouter/owl-alpha");
+    expect(switched.state.messages.at(-1)?.content).toContain(
+      "Switched to session release-session."
+    );
+  });
+
+  it("switches to a known chat session id without a numbered list", async () => {
+    const loaded = createInitialChatState({
+      sessionId: "known-session",
+      cwd: "/repo/old",
+      dryRun: false,
+    });
+    const loadSession = vi.fn(async (_sessionId: string) => loaded);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/session known-session",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      loadSession,
+    });
+
+    expect(loadSession).toHaveBeenCalledWith("known-session");
+    expect(result.state.sessionId).toBe("known-session");
+    expect(result.state.projectRoot).toBe("/repo");
+    expect(result.state.messages.at(-1)?.content).toContain("Switched to session known-session.");
+  });
+
+  it("reports missing chat sessions when switching by id", async () => {
+    const loadSession = vi.fn(async (_sessionId: string) => undefined);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/session missing-session",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      loadSession,
+    });
+
+    expect(loadSession).toHaveBeenCalledWith("missing-session");
+    expect(result.state.sessionId).toBe("session-a");
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Chat session not found: missing-session"
+    );
+  });
+
+  it("reports missing numbered session choices without loading numeric ids", async () => {
+    const loadSession = vi.fn(async (_sessionId: string) => undefined);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/session 1",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      loadSession,
+    });
+
+    expect(loadSession).not.toHaveBeenCalled();
+    expect(result.state.messages.at(-1)?.content).toContain("Session choice not found.");
+  });
+
   it("lists reusable workflows from inside chat and supports scope filtering", async () => {
     const listWorkflowLocators = vi.fn(async (_scope?: "project" | "global" | "all") => [
       locator,
