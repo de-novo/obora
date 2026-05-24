@@ -1,6 +1,7 @@
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { WorkflowLocator, WorkflowRunStepSummary, WorkflowRunSummary } from "@obora/sdk";
 
+import { chatPromptCommandRows } from "./commands.js";
 import { runChoiceSummary } from "./run-choices.js";
 import { visibleChatMessages } from "./state.js";
 import type { ChatMessage, ChatRunChoice, ChatSessionState, ChatSessionStatus } from "./types.js";
@@ -451,25 +452,9 @@ const promptLabel = (state: ChatSessionState): string =>
       ? "Choose /workflow 1 or run once with /run #1 <task>"
       : "Select /workflow <name> first";
 
-const promptCommandRows = (state: ChatSessionState): ReadonlyArray<string> => {
-  if (state.inspectedRunSummary) return ["/clear  /runs  /details <runId>", "/session  /project  /help"];
-  if (state.runChoices && state.runChoices.length > 0) {
-    return [
-      "1  /details <runId>  /runs",
-      "/runs --project  /runs --tag <tag>  /runs --status failed",
-    ];
-  }
-  if (state.workflowLocator) {
-    return ["/run <task>  /runs  /workflows", "/session  /project  /tags  /help"];
-  }
-  return state.workflowChoices && state.workflowChoices.length > 0
-    ? ["/workflow 1  /run #1 <task>  /workflows [scope]", "/project  /sessions  /help"]
-    : ["/workflows  /workflow <name-or-path>  /project [path]", "/sessions  /tags  /help"];
-};
-
 const renderPrompt = (state: ChatSessionState, width: number): ReadonlyArray<string> => {
   const prompt = `› ${promptLabel(state)}`;
-  const commandRows = promptCommandRows(state);
+  const commandRows = chatPromptCommandRows(state);
   const footer = `${state.modelName ?? "default"}  ·  ${compactPath(state.cwd, Math.max(12, width - 28))}`;
   const contextFooter = state.inspectedRunSummary
     ? `viewing run ${state.inspectedRunSummary.executionId}  ·  /details ${state.inspectedRunSummary.executionId}`
