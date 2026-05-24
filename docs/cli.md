@@ -658,6 +658,7 @@ obora chat --show-run <executionId> [--session <id>]
 - `/workflow <name-or-path>` switches the selected workflow inside the same session.
 - `/run <task>` runs the current workflow with an explicit task message.
 - `/details <executionId>` shows the recorded step outputs, tools, artifacts, decisions, and issues for a prior workflow result in the current session.
+- `/tags` shows the current session tags, `/tags release,qa` updates them, and `/tags --clear` removes them.
 - `/help` prints available chat commands.
 - `/exit` or `/quit` closes the chat session.
 - Non-TTY automation must use `--once <message>`.

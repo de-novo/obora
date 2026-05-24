@@ -218,7 +218,7 @@ const renderTranscript = (state: ChatSessionState, width: number): ReadonlyArray
 ];
 
 const renderPrompt = (state: ChatSessionState, width: number): ReadonlyArray<string> => {
-  const prompt = `› ${state.workflowLocator ? "Type a task for this workflow" : "Select /workflow <name> first"}   /run <task>  /details <runId>  /workflow <name>  /help  /exit`;
+  const prompt = `› ${state.workflowLocator ? "Type a task for this workflow" : "Select /workflow <name> first"}   /run <task>  /details <runId>  /tags  /workflow <name>  /help  /exit`;
   const footer = `${state.modelName ?? "default"}  ·  ${compactPath(state.cwd, Math.max(12, width - 28))}`;
   return ["", inputBg(fit(prompt, width)), dim(fit(footer, width))];
 };

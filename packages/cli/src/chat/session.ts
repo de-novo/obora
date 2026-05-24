@@ -45,7 +45,7 @@ interface ChatTurnResult {
 }
 
 const chatHelp =
-  "Commands: /workflow <name-or-path> selects a reusable workflow, /run <task> runs the current workflow, /details <executionId> shows step results, /exit quits.";
+  "Commands: /workflow <name-or-path> selects a reusable workflow, /run <task> runs the current workflow, /details <executionId> shows step results, /tags [a,b] shows or updates session tags, /exit quits.";
 
 const isExitCommand = (input: string): boolean => input === "/exit" || input === "/quit";
 
@@ -54,6 +54,9 @@ const workflowTargetFromCommand = (input: string): string | undefined =>
 
 const detailsTargetFromCommand = (input: string): string | undefined =>
   input.startsWith("/details ") ? input.slice("/details ".length).trim() : undefined;
+
+const tagsTargetFromCommand = (input: string): string | undefined =>
+  input.startsWith("/tags ") ? input.slice("/tags ".length).trim() : undefined;
 
 const messageFromInput = (input: string): string =>
   input.startsWith("/run ") ? input.slice("/run ".length).trim() : input;
@@ -65,6 +68,9 @@ const normalizeSessionTags = (tags: string | undefined): ReadonlyArray<string> =
         .map((tag) => tag.trim())
         .filter((tag) => tag.length > 0)
     : [];
+
+const sessionTagsFromCommand = (tagsTarget: string): ReadonlyArray<string> =>
+  tagsTarget === "--clear" ? [] : normalizeSessionTags(tagsTarget);
 
 const transientProviderPatterns = [
   "provider returned error",
@@ -182,6 +188,17 @@ const findRunSummaryInState = (
     )
     .at(0);
 
+const formatSessionTags = (tags: ReadonlyArray<string> | undefined): string =>
+  tags && tags.length > 0 ? tags.join(", ") : "none";
+
+const withSessionTags = (
+  state: ChatSessionState,
+  tags: ReadonlyArray<string>
+): ChatSessionState => ({
+  ...state,
+  tags,
+});
+
 const withResolvedWorkflow = (
   state: ChatSessionState,
   workflowTarget: string,
@@ -235,6 +252,25 @@ export const handleChatInput = async ({
 
   if (trimmed === "/help") {
     return { state: appendAssistant(state, chatHelp), exit: false };
+  }
+
+  if (trimmed === "/tags") {
+    return {
+      state: appendAssistant(state, `Session tags: ${formatSessionTags(state.tags)}`),
+      exit: false,
+    };
+  }
+
+  const tagsTarget = tagsTargetFromCommand(trimmed);
+  if (tagsTarget !== undefined) {
+    const tags = sessionTagsFromCommand(tagsTarget);
+    return {
+      state: appendAssistant(
+        withSessionTags(state, tags),
+        `Session tags updated: ${formatSessionTags(tags)}`
+      ),
+      exit: false,
+    };
   }
 
   const workflowTarget = workflowTargetFromCommand(trimmed);

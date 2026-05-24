@@ -298,6 +298,45 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("Run details not found: missing-run");
   });
 
+  it("shows and updates session tags without requiring workflow selection", async () => {
+    vi.clearAllMocks();
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+      tags: ["triage"],
+    });
+
+    const shown = await handleChatInput({
+      input: "/tags",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+    const updated = await handleChatInput({
+      input: "/tags release, qa",
+      state: shown.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+    const cleared = await handleChatInput({
+      input: "/tags --clear",
+      state: updated.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(shown.state.messages.at(-1)?.content).toContain("Session tags: triage");
+    expect(updated.state.tags).toEqual(["release", "qa"]);
+    expect(updated.state.messages.at(-1)?.content).toContain("Session tags updated: release, qa");
+    expect(cleared.state.tags).toEqual([]);
+    expect(cleared.state.messages.at(-1)?.content).toContain("Session tags updated: none");
+  });
+
   it("retries transient provider failures before returning the chat run summary", async () => {
     const flakyRunWorkflow = vi
       .fn<typeof runWorkflow>()
