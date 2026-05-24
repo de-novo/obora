@@ -6,7 +6,6 @@ import { buildWorkflowRunSummary } from "@obora/sdk";
 import type {
   WorkflowLocator,
   WorkflowResolveScope,
-  WorkflowRunStepSummary,
   WorkflowRunSummary,
 } from "@obora/sdk";
 
@@ -240,32 +239,6 @@ const formatRunSummaryMessage = (
       ? `${runSummary.message} > ${runSummary.steps.map((step) => step.name).join(", ")}`
       : "Workflow run completed for this chat task.";
 
-const formatOptionalList = (label: string, values: ReadonlyArray<string>): string | undefined =>
-  values.length > 0 ? `${label}: ${values.join(", ")}` : undefined;
-
-const formatDetailsStep = (step: WorkflowRunStepSummary): ReadonlyArray<string> =>
-  [
-    `- ${step.name}: ${step.status}${step.agent ? ` · ${step.agent}` : ""}${step.model ? ` · ${step.model}` : ""}`,
-    `  output: ${step.outputPreview}`,
-    formatOptionalList("  tools", step.toolsUsed),
-    formatOptionalList("  artifacts", step.artifacts),
-    formatOptionalList("  decisions", step.decisions),
-    step.rationale ? `  rationale: ${step.rationale}` : undefined,
-    formatOptionalList("  issues", step.issues),
-    formatOptionalList("  dependencies", step.dependencies),
-  ].filter((line): line is string => Boolean(line));
-
-const formatRunDetailsMessage = (summary: WorkflowRunSummary): string =>
-  [
-    `Run details ${summary.executionId}`,
-    `${summary.message} (${summary.status})`,
-    `Workflow: ${summary.workflowName}`,
-    `Steps: ${summary.completedStepCount}/${summary.totalStepCount}`,
-    ...(summary.durationMs === undefined ? [] : [`Duration: ${summary.durationMs}ms`]),
-    ...(summary.error ? [`Error: ${summary.error}`] : []),
-    ...summary.steps.flatMap(formatDetailsStep),
-  ].join("\n");
-
 const findRunSummaryInState = (
   state: ChatSessionState,
   executionId: string
@@ -274,7 +247,11 @@ const findRunSummaryInState = (
     .flatMap((message) =>
       message.runSummary?.executionId === executionId ? [message.runSummary] : []
     )
-    .at(0);
+    .at(0) ??
+  (state.lastRunSummary?.executionId === executionId ? state.lastRunSummary : undefined) ??
+  (state.inspectedRunSummary?.executionId === executionId
+    ? state.inspectedRunSummary
+    : undefined);
 
 const formatSessionTags = (tags: ReadonlyArray<string> | undefined): string =>
   tags && tags.length > 0 ? tags.join(", ") : "none";
@@ -521,7 +498,9 @@ const runChatTask = ({
           {
             ...setChatStatus(runningState, "ready"),
             lastRunCommand,
-            ...(runSummary ? { lastRunSummary: runSummary } : {}),
+            ...(runSummary
+              ? { lastRunSummary: runSummary, inspectedRunSummary: runSummary }
+              : {}),
           },
           formatRunSummaryMessage(runSummary, commandOptions.dryRun),
           runSummary
@@ -844,9 +823,9 @@ export const handleChatInput = async ({
     const summary = findRunSummaryInState(state, detailsExecutionId);
     return {
       state: appendAssistant(
-        state,
+        summary ? { ...state, inspectedRunSummary: summary } : state,
         summary
-          ? formatRunDetailsMessage(summary)
+          ? `Opened run details ${summary.executionId}.`
           : `Run details not found: ${detailsExecutionId}`
       ),
       exit: false,

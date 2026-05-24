@@ -30,6 +30,7 @@ export interface ChatSessionState {
   readonly lastError?: string;
   readonly lastRunCommand?: string;
   readonly lastRunSummary?: WorkflowRunSummary;
+  readonly inspectedRunSummary?: WorkflowRunSummary;
 }
 
 export interface ChatRunInput {

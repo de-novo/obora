@@ -194,30 +194,11 @@ const activityLines = (state: ChatSessionState): ReadonlyArray<string> => [
   `${muted("audit")} command, workflow, cwd, provider, and model are visible`,
 ];
 
-const runStepLines = (step: WorkflowRunStepSummary): ReadonlyArray<string> =>
-  [
-    `${muted(">")} ${bold(step.name)} ${step.status}${step.agent ? ` · ${step.agent}` : ""}${step.model ? ` · ${step.model}` : ""}`,
-    `${muted("output")} ${step.outputPreview}`,
-    formatStepToolLine(step),
-    formatStepArtifactLine(step),
-    formatStepDecisionLine(step),
-    step.rationale ? `${muted("rationale")} ${step.rationale}` : undefined,
-    step.issues.length > 0 ? `${muted("issues")} ${step.issues.join("; ")}` : undefined,
-  ].filter((line): line is string => Boolean(line));
-
-const runResultLines = (state: ChatSessionState): ReadonlyArray<string> =>
-  state.lastRunSummary
-    ? [
-        "",
-        `${muted("run")} ${state.lastRunSummary.message}`,
-        `${muted("id")} ${state.lastRunSummary.executionId}   ${formatRunDuration(state.lastRunSummary)}`,
-        ...(state.lastRunSummary.error ? [`${muted("error")} ${red(state.lastRunSummary.error)}`] : []),
-        ...state.lastRunSummary.steps.flatMap(runStepLines),
-      ]
-    : [];
-
 const renderMeta = (state: ChatSessionState, width: number): ReadonlyArray<string> =>
-  card("workflow", [...workflowLines(state), "", ...activityLines(state), ...runResultLines(state)], width);
+  card("workflow", [...workflowLines(state), "", ...activityLines(state)], width);
+
+const inspectedRunSummary = (state: ChatSessionState): WorkflowRunSummary | undefined =>
+  state.inspectedRunSummary ?? state.lastRunSummary;
 
 const runDetailHeaderLines = (summary: WorkflowRunSummary): ReadonlyArray<string> => [
   `${muted("id")} ${summary.executionId}   ${muted("status")} ${summary.status}   ${muted("steps")} ${summary.completedStepCount}/${summary.totalStepCount}`,
@@ -246,21 +227,23 @@ const runDetailStepLines = (
 const renderRunInspector = (
   state: ChatSessionState,
   width: number
-): ReadonlyArray<string> =>
-  state.lastRunSummary
+): ReadonlyArray<string> => {
+  const summary = inspectedRunSummary(state);
+  return summary
     ? [
         "",
         ...card(
           "run details",
           [
-            ...runDetailHeaderLines(state.lastRunSummary),
+            ...runDetailHeaderLines(summary),
             "",
-            ...state.lastRunSummary.steps.flatMap(runDetailStepLines),
+            ...summary.steps.flatMap(runDetailStepLines),
           ],
           width
         ),
       ]
     : [];
+};
 
 const sessionTagText = (summary: ChatSessionSummary): string =>
   summary.tags.length > 0 ? summary.tags.join(",") : "untagged";

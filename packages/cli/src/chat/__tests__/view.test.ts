@@ -248,6 +248,51 @@ describe("renderChatView", () => {
     expect(plain).toContain("/workflow 1  /run #1 <task>  /workflows [scope]");
   });
 
+  it("renders the inspected run instead of the latest run", () => {
+    const inspectedSummary: WorkflowRunSummary = {
+      ...runSummary,
+      executionId: "exec-inspected",
+      workflowName: "code-review",
+      message: "Workflow completed: 1/1 steps completed.",
+      completedStepCount: 1,
+      totalStepCount: 1,
+      steps: [
+        {
+          name: "review",
+          status: "completed",
+          outputPreview: "Reviewed repository changes.",
+          outputFormat: "text",
+          toolsUsed: ["file_read"],
+          artifacts: ["review.md"],
+          decisions: ["Inspect changed files"],
+          issues: [],
+          dependencies: [],
+        },
+      ],
+    };
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-a",
+            cwd: "/repo",
+            dryRun: false,
+          }),
+          lastRunSummary: runSummary,
+          inspectedRunSummary: inspectedSummary,
+        },
+        { columns: 120 }
+      )
+    );
+    const plain = stripAnsi(output);
+
+    expect(plain).toContain("id exec-inspected");
+    expect(plain).toContain("workflow code-review");
+    expect(plain).toContain("#1 review completed");
+    expect(plain).toContain("artifacts review.md");
+    expect(plain).not.toContain("id exec-chat-1");
+  });
+
   it("falls back to a stacked layout for narrow terminals", () => {
     const output = renderedText(
       renderChatView(

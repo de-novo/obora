@@ -314,6 +314,7 @@ describe("chat session", () => {
       executionId: "exec-chat-1",
       message: "Workflow completed: 2/2 steps completed.",
     });
+    expect(result.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
     expect(lastMessage?.content).toContain("Workflow completed: 2/2 steps completed.");
     expect(lastMessage?.runSummary?.steps[0]).toMatchObject({
       name: "collect",
@@ -322,7 +323,7 @@ describe("chat session", () => {
     });
   });
 
-  it("shows step-level run details from the current chat session", async () => {
+  it("opens step-level run details from the current chat session", async () => {
     const runWorkflowWithResult = vi.fn(async () => executionResult);
     const selected = {
       ...createInitialChatState({
@@ -351,12 +352,18 @@ describe("chat session", () => {
 
     const content = result.state.messages.at(-1)?.content;
     expect(runWorkflowWithResult).toHaveBeenCalledOnce();
-    expect(content).toContain("Run details exec-chat-1");
-    expect(content).toContain("collect: completed");
-    expect(content).toContain("openrouter/owl-alpha");
-    expect(content).toContain("tools: file_read");
-    expect(content).toContain("artifacts: release-notes.md");
-    expect(content).toContain("decisions: Use release notes");
+    expect(content).toContain("Opened run details exec-chat-1.");
+    expect(result.state.inspectedRunSummary).toMatchObject({
+      executionId: "exec-chat-1",
+      workflowName: "release-readiness",
+      completedStepCount: 2,
+    });
+    expect(result.state.inspectedRunSummary?.steps[0]).toMatchObject({
+      name: "collect",
+      toolsUsed: ["file_read"],
+      artifacts: ["release-notes.md"],
+      decisions: ["Use release notes"],
+    });
   });
 
   it("reports missing run details without requiring a workflow selection", async () => {
