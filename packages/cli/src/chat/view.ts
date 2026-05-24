@@ -318,7 +318,7 @@ const renderRunHistory = (
         ...card(
           "runs",
           [
-            `${muted("select")} /details 1   ${muted("by id")} /details <runId>   ${muted("refresh")} /runs`,
+            `${muted("select")} 1   ${muted("by id")} /details <runId>   ${muted("refresh")} /runs`,
             runFilterHint(state),
             ...state.runChoices.slice(0, 8).flatMap((choice, index) => [
               renderRunHistoryLine(state, choice, index),

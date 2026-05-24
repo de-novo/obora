@@ -93,6 +93,12 @@ const workflowTargetFromCommand = (input: string): string | undefined =>
 const detailsTargetFromCommand = (input: string): string | undefined =>
   input.startsWith("/details ") ? input.slice("/details ".length).trim() : undefined;
 
+const runDetailShortcutTargetFromInput = (
+  input: string,
+  state: ChatSessionState
+): string | undefined =>
+  /^\d+$/u.test(input) && state.runChoices && state.runChoices.length > 0 ? input : undefined;
+
 const tagsTargetFromCommand = (input: string): string | undefined =>
   input.startsWith("/tags ") ? input.slice("/tags ".length).trim() : undefined;
 
@@ -326,7 +332,7 @@ const formatRunListMessage = (summaries: ReadonlyArray<WorkflowRunSummary>): str
     ? [
         "Recent workflow runs:",
         ...summaries.map(formatRunSummaryLine),
-        "Use /details 1 to open a run, or /details <executionId>.",
+        "Type 1 to open a run, or use /details <executionId>.",
       ].join("\n")
     : "No workflow runs found in this chat session.";
 
@@ -1057,7 +1063,8 @@ export const handleChatInput = async ({
     };
   }
 
-  const detailsExecutionId = detailsTargetFromCommand(trimmed);
+  const detailsExecutionId =
+    detailsTargetFromCommand(trimmed) ?? runDetailShortcutTargetFromInput(trimmed, state);
   if (detailsExecutionId) {
     if (detailsExecutionId === "clear") {
       return {

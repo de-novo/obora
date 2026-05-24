@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createInitialChatState } from "../state.js";
 import { handleChatInput, runChatSession } from "../session.js";
 import { saveChatSessionState } from "../store.js";
+import { chatRunChoicesFromSummaries } from "../run-choices.js";
 
 const locator: WorkflowLocator = {
   id: "project:abc",
@@ -448,7 +449,25 @@ describe("chat session", () => {
       "exec-chat-1",
     ]);
     expect(listed.state.messages.at(-1)?.content).toContain("Recent workflow runs:");
-    expect(listed.state.messages.at(-1)?.content).toContain("Use /details 1");
+    expect(listed.state.messages.at(-1)?.content).toContain("Type 1 to open a run");
+    expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
+    expect(opened.state.messages.at(-1)?.content).toContain("Opened run details exec-chat-1.");
+  });
+
+  it("opens listed run details by typing the run number", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const listedState = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+    };
+    const opened = await handleChatInput({
+      input: "1",
+      state: listedState,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
     expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
     expect(opened.state.messages.at(-1)?.content).toContain("Opened run details exec-chat-1.");
   });

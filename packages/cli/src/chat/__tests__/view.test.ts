@@ -268,7 +268,7 @@ describe("renderChatView", () => {
     const plain = stripAnsi(output);
 
     expect(plain).toContain("runs");
-    expect(plain).toContain("/details 1");
+    expect(plain).toContain("select 1");
     expect(plain).toContain("/details <runId>");
     expect(plain).toContain("/runs --project");
     expect(plain).toContain("/runs --tag release");
