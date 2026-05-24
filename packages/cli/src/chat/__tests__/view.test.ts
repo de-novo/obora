@@ -241,6 +241,7 @@ describe("renderChatView", () => {
             dryRun: false,
           }),
           inspectedRunSummary: runSummary,
+          tags: ["release"],
           runChoices: [
             {
               runSummary,
@@ -269,6 +270,9 @@ describe("renderChatView", () => {
     expect(plain).toContain("runs");
     expect(plain).toContain("/details 1");
     expect(plain).toContain("/details <runId>");
+    expect(plain).toContain("/runs --project");
+    expect(plain).toContain("/runs --tag release");
+    expect(plain).toContain("/runs --status failed");
     expect(plain).toContain("● #1 exec-chat-1 completed release-readiness steps 2/2");
     expect(plain).toContain("○ #2 exec-chat-2 completed code-review steps 1/2");
     expect(plain).toContain("session session-a");
@@ -299,6 +303,7 @@ describe("renderChatView", () => {
     const plain = stripAnsi(output);
 
     expect(plain).toContain("session current");
+    expect(plain).toContain("/runs --tag <tag>");
     expect(plain).not.toContain("switch /session");
   });
 

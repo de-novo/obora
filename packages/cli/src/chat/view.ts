@@ -299,6 +299,15 @@ const renderRunHistoryMeta = (choice: ChatRunChoice): string => {
   ].join("   ");
 };
 
+const runFilterHint = (state: ChatSessionState): string =>
+  [
+    `${muted("project")} /runs --project`,
+    ...(state.tags && state.tags.length > 0
+      ? [`${muted("tag")} /runs --tag ${state.tags[0]}`]
+      : [`${muted("tag")} /runs --tag <tag>`]),
+    `${muted("status")} /runs --status failed`,
+  ].join("   ");
+
 const renderRunHistory = (
   state: ChatSessionState,
   width: number
@@ -310,6 +319,7 @@ const renderRunHistory = (
           "runs",
           [
             `${muted("select")} /details 1   ${muted("by id")} /details <runId>   ${muted("refresh")} /runs`,
+            runFilterHint(state),
             ...state.runChoices.slice(0, 8).flatMap((choice, index) => [
               renderRunHistoryLine(state, choice, index),
               renderRunHistoryMeta(choice),
@@ -452,7 +462,7 @@ const renderPrompt = (state: ChatSessionState, width: number): ReadonlyArray<str
   const prompt = `› ${promptLabel(state)}`;
   const primaryCommands = promptPrimaryCommands(state);
   const secondaryCommands =
-    "/session  /session 1  /session rename 1 <id>  /session delete 1  /project  /sessions  /tags  /help";
+    "/runs --project  /runs --tag <tag>  /runs --status failed  /session  /project  /sessions  /tags  /help";
   const footer = `${state.modelName ?? "default"}  ·  ${compactPath(state.cwd, Math.max(12, width - 28))}`;
   const contextFooter = state.inspectedRunSummary
     ? `viewing run ${state.inspectedRunSummary.executionId}  ·  /details ${state.inspectedRunSummary.executionId}`
