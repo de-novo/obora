@@ -495,6 +495,50 @@ describe("chat session", () => {
     expect(cleared.state.messages.at(-1)?.content).toBe("Closed run details view.");
   });
 
+  it("closes run details without preserving unrelated selection panels", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const listedState = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      inspectedRunSummary: runSummary,
+      workflowChoices: [locator],
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "idle" as const,
+          cwd: "/repo",
+          tags: [],
+          messageCount: 1,
+          updatedAt: "2026-05-24T10:11:12.000Z",
+        },
+      ],
+      runChoices: [
+        {
+          runSummary,
+          sessionId: "history-session",
+          messageId: "assistant:run",
+          source: "persisted",
+        },
+      ],
+    };
+
+    const cleared = await handleChatInput({
+      input: "/clear",
+      state: listedState,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(cleared.state.inspectedRunSummary).toBeUndefined();
+    expect(cleared.state.workflowChoices).toBeUndefined();
+    expect(cleared.state.sessionChoices).toBeUndefined();
+    expect(cleared.state.runChoices?.[0]).toMatchObject({
+      sessionId: "history-session",
+      runSummary: { executionId: "exec-chat-1" },
+    });
+    expect(cleared.state.messages.at(-1)?.content).toBe("Closed run details view.");
+  });
+
   it("keeps the previous run detail clear command compatible", async () => {
     const runSummary = buildWorkflowRunSummary(executionResult);
     const state = {

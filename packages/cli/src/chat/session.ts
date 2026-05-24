@@ -349,6 +349,8 @@ const clearPanels = (state: ChatSessionState): ChatSessionState =>
     ? {
         ...state,
         inspectedRunSummary: undefined,
+        sessionChoices: undefined,
+        workflowChoices: undefined,
         showHelpPanel: undefined,
       }
     : {
