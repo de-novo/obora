@@ -386,6 +386,14 @@ describe("chat session", () => {
       workflowLocator: codeReviewLocator,
       lastRunTask: "perform the release check",
       lastRunWorkflowLocator: locator,
+      lastRunOptions: {
+        provider: "openrouter",
+        model: "openrouter/owl-alpha",
+        config: "/repo/.obora/config.yaml",
+        agents: "/repo/agents.yaml",
+        policy: "/repo/policy.yaml",
+        timeout: 2500,
+      },
       status: "ready" as const,
     };
 
@@ -403,6 +411,9 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("Task: perform the release check");
     expect(result.state.messages.at(-1)?.content).toContain(
       "Path: .obora/workflows/release-readiness.yaml"
+    );
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Options: provider openrouter · model openrouter/owl-alpha · timeout 2500ms · files+3"
     );
     expect(result.state.messages.at(-1)?.content).toContain("Run /retry to execute it again.");
   });
@@ -2413,6 +2424,14 @@ describe("chat session", () => {
       lastRunCommand: "obora run .obora/workflows/release-readiness.yaml",
       lastRunTask: "perform the release check",
       lastRunWorkflowLocator: locator,
+      lastRunOptions: {
+        provider: "openrouter",
+        model: "openrouter/owl-alpha",
+        config: "/repo/.obora/config.yaml",
+        agents: "/repo/agents.yaml",
+        policy: "/repo/policy.yaml",
+        timeout: 2500,
+      },
       lastRunSummary: {
         executionId: "exec-session-1",
         workflowName: "release-readiness",
@@ -2445,6 +2464,9 @@ describe("chat session", () => {
     expect(content).toContain("Mode: dry-run");
     expect(content).toContain("Last run: obora run .obora/workflows/release-readiness.yaml");
     expect(content).toContain("Retry: release-readiness -> perform the release check");
+    expect(content).toContain(
+      "Retry options: provider openrouter · model openrouter/owl-alpha · timeout 2500ms · files+3"
+    );
     expect(content).toContain("Last result: completed 1/1");
     expect(content).toContain("Details: /details exec-session-1");
   });

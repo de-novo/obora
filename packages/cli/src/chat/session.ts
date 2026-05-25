@@ -44,6 +44,7 @@ import {
   toChatRunChoice,
   type ChatRunChoiceInput,
 } from "./run-choices.js";
+import { formatCompactChatRunOptions } from "./run-options-format.js";
 import { isRunStatusFilter, runStatusFilterUsage } from "./run-status-filter.js";
 import {
   createChatRunInput,
@@ -936,6 +937,9 @@ const formatRetryStatusMessage = (state: ChatSessionState): string =>
         `Workflow: ${state.lastRunWorkflowLocator.name} (${state.lastRunWorkflowLocator.scope})`,
         `Task: ${state.lastRunTask}`,
         `Path: ${state.lastRunWorkflowLocator.displayPath}`,
+        ...(formatCompactChatRunOptions(state.lastRunOptions)
+          ? [`Options: ${formatCompactChatRunOptions(state.lastRunOptions)}`]
+          : []),
         `Command: obora run ${state.lastRunWorkflowLocator.displayPath}`,
         "Run /retry to execute it again.",
       ].join("\n")
@@ -956,6 +960,9 @@ const formatSessionStatusMessage = (state: ChatSessionState): string =>
     `User turns: ${userTurnCount(state)}`,
     `Last run: ${state.lastRunCommand ?? "none"}`,
     `Retry: ${formatRetryTarget(state)}`,
+    ...(formatCompactChatRunOptions(state.lastRunOptions)
+      ? [`Retry options: ${formatCompactChatRunOptions(state.lastRunOptions)}`]
+      : []),
     `Last result: ${formatLastResult(state)}`,
     ...(state.lastRunSummary ? [`Details: /details ${state.lastRunSummary.executionId}`] : []),
   ].join("\n");
