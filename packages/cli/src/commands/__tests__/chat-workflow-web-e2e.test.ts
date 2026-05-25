@@ -22,6 +22,42 @@ const writeWorkflow = (path: string): Promise<void> =>
     "utf-8"
   );
 
+const writeNamedWorkflow = (path: string, name: string, description: string): Promise<void> =>
+  writeFile(
+    path,
+    [
+      `name: ${name}`,
+      "version: '1.0'",
+      `description: ${description}`,
+      "steps:",
+      "  - name: prepare",
+      "    agent: worker",
+      "  - name: decide",
+      "    agent: reviewer",
+      "",
+    ].join("\n"),
+    "utf-8"
+  );
+
+interface ChatCommandJson {
+  readonly workflowLocator?: {
+    readonly name?: string;
+    readonly description?: string;
+    readonly stepCount?: number;
+  };
+  readonly lastRunWorkflowLocator?: {
+    readonly name?: string;
+    readonly description?: string;
+    readonly stepCount?: number;
+  };
+  readonly lastRunTask?: string;
+  readonly lastRunCommand?: string;
+  readonly messages?: ReadonlyArray<{ readonly content?: string }>;
+}
+
+const lastJsonOutput = (): ChatCommandJson =>
+  JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0] ?? "{}")) as unknown as ChatCommandJson;
+
 const withTempProject = async (
   testFn: (input: {
     readonly root: string;
@@ -137,6 +173,106 @@ describe("chat command with workflow web saves", () => {
       } finally {
         await bridge.close();
       }
+    });
+  });
+
+  it("persists workflow switching across multiple chat commands in one session", async () => {
+    await withTempProject(async ({ root, globalDir }) => {
+      const codeReviewPath = join(root, ".obora", "workflows", "code-review.yaml");
+      await writeNamedWorkflow(
+        codeReviewPath,
+        "code-review",
+        "Review repository changes from the switched workflow"
+      );
+
+      await createCLI().parseAsync(
+        [
+          "chat",
+          "release-readiness",
+          "--once",
+          "prepare release",
+          "--dry-run",
+          "--scope",
+          "project",
+          "--project",
+          root,
+          "--global-workflows-dir",
+          globalDir,
+          "--session",
+          "switch-session",
+          "--json",
+        ],
+        { from: "user" }
+      );
+      const releaseRun = lastJsonOutput();
+
+      await createCLI().parseAsync(
+        [
+          "chat",
+          "--once",
+          "/workflow code-review",
+          "--dry-run",
+          "--scope",
+          "project",
+          "--project",
+          root,
+          "--global-workflows-dir",
+          globalDir,
+          "--session",
+          "switch-session",
+          "--json",
+        ],
+        { from: "user" }
+      );
+      const switched = lastJsonOutput();
+
+      await createCLI().parseAsync(
+        [
+          "chat",
+          "--once",
+          "review changes",
+          "--dry-run",
+          "--scope",
+          "project",
+          "--project",
+          root,
+          "--global-workflows-dir",
+          globalDir,
+          "--session",
+          "switch-session",
+          "--json",
+        ],
+        { from: "user" }
+      );
+      const reviewRun = lastJsonOutput();
+
+      await createCLI().parseAsync(["chat", "--show-session", "--session", "switch-session", "--json"], {
+        from: "user",
+      });
+      const persisted = lastJsonOutput();
+
+      expect(releaseRun.workflowLocator).toMatchObject({
+        name: "release-readiness",
+        stepCount: 1,
+      });
+      expect(releaseRun.lastRunTask).toBe("prepare release");
+      expect(switched.workflowLocator).toMatchObject({
+        name: "code-review",
+        description: "Review repository changes from the switched workflow",
+        stepCount: 2,
+      });
+      expect(switched.messages?.at(-1)?.content).toContain("Selected workflow code-review");
+      expect(reviewRun.workflowLocator?.name).toBe("code-review");
+      expect(reviewRun.lastRunWorkflowLocator).toMatchObject({
+        name: "code-review",
+        stepCount: 2,
+      });
+      expect(reviewRun.lastRunTask).toBe("review changes");
+      expect(reviewRun.lastRunCommand).toBe("obora run .obora/workflows/code-review.yaml");
+      expect(reviewRun.messages?.at(-1)?.content).toContain("Dry-run completed.");
+      expect(persisted.workflowLocator?.name).toBe("code-review");
+      expect(persisted.lastRunWorkflowLocator?.name).toBe("code-review");
+      expect(persisted.lastRunTask).toBe("review changes");
     });
   });
 });
