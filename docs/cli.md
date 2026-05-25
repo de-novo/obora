@@ -636,9 +636,9 @@ obora chat --show-run <executionId> [--session <id>]
 - `--filter-tag <tag>` only list sessions with the given tag
 - `--filter-project <path|current>` only list sessions for a project root
 - `--show-session` print the persisted chat session selected by `--session`
-- `--list-runs` list persisted workflow runs without starting the TUI, including saved task and retry target; with `--session`, search only that session
+- `--list-runs` list persisted workflow runs without starting the TUI, including saved task, retry target, and compact run options; with `--session`, search only that session
 - `--filter-run-status <queued|running|waiting|suspended|completed|failed|aborted>` only list persisted workflow runs with the given status
-- `--show-run <executionId>` print a persisted workflow run summary with step details; with `--session`, search only that session
+- `--show-run <executionId>` print a persisted workflow run summary with step details and full saved run options; with `--session`, search only that session
 - `--once <message>` run one chat message and exit, useful for automation and smoke tests
 - `--dry-run` validate the selected workflow without live execution
 - `--provider <name>` LLM provider override for workflow runs
@@ -655,7 +655,8 @@ obora chat --show-run <executionId> [--session <id>]
 - Renders an `@earendil-works/pi-tui` differential terminal chat console with a Codex/Claude-style session card, conversation stream, workflow inspector, run/audit state, and bottom command bar.
 - Persists chat sessions under `.obora/chat/sessions/`; reusing `--session <id>` restores prior messages, selected workflow state, and run summaries.
 - New chat sessions store the resolved project root and optional comma-separated tags so session lists can be grouped by project, tag, or day.
-- Persisted run summaries expose the saved chat message, workflow target, retry workflow, step-level status, agent, model, output preview, tools, artifacts, decisions, dependencies, and issues through `--show-run`; add `--json` for the raw persisted detail object.
+- Persisted run summaries expose the saved chat message, workflow target, source project, retry workflow, run options, step-level status, agent, model, output preview, tools, artifacts, decisions, dependencies, and issues through `--show-run`; add `--json` for the raw persisted detail object.
+- `/runs` and `chat --list-runs` use compact run-option text such as `provider openrouter · model openrouter/owl-alpha · timeout 2500ms · files+3`; `--show-run` keeps full `config`, `agents`, and `policy` paths for audit.
 - The TUI shows `/details <executionId>` on workflow result messages; run lists also support `/details 1` for the first numbered run.
 - A plain message runs the selected workflow with input shaped as `{ message, sessionId, workflow }`.
 - Chat messages follow Obora's execution input principle: the injected message is the operator request, while the workflow defines capability, policy, constraints, and reporting expectations.
@@ -666,10 +667,10 @@ obora chat --show-run <executionId> [--session <id>]
 - `/run <task>` runs the current workflow with an explicit task message.
 - `/run --workflow <name-or-path> <task>` runs one task with a different workflow without changing the session default.
 - `/details 1` or `/details <executionId>` shows recorded step outputs, tools, artifacts, decisions, and issues for a prior workflow result.
-- `/runs --all` and filtered `/runs ...` lists show the saved task text and retry target for each persisted chat run.
+- `/runs --all` and filtered `/runs ...` lists show the saved task text, retry target, source session, and compact run options for each persisted chat run.
 - `/runs --session 1` or `/runs --session <id>` lists persisted runs for a numbered or known session.
 - `/runs failed` is a shortcut for `/runs --status failed` when triaging failed persisted chat runs.
-- `/retry 1` or `/retry <executionId>` reruns a saved chat task; if older run metadata has no workflow locator, Obora resolves the saved workflow name in the current project/global workflow scope.
+- `/retry 1` or `/retry <executionId>` reruns a saved chat task with its saved provider/model/config/agents/policy/timeout options when available; if older run metadata has no workflow locator, Obora resolves the saved workflow name from the run's source project when available, then falls back to the current project/global workflow scope.
 - `/session` shows the current session id, project, tags, selected workflow, mode, provider/model, and last run metadata.
 - `/project` shows the current session project root, and `/project <path>` changes it for subsequent workflow discovery.
 - `/sessions` shows recent persisted chat sessions, `/sessions release` filters the list by tag, `/sessions here` or `/sessions --project` filters by the current project, and `/session 1` or `/session <id>` switches to a listed or known session.

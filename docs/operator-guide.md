@@ -167,9 +167,9 @@ obora chat --session release-qa --once "/retry <executionId>"
 - repair-loop / triageCause / linked DLQ 기준으로 정렬·필터된 operator view
 - `inspect`를 top-level alias로 바로 써서 특정 실행 상세 조회
 - local/root `--json`으로 같은 persisted-run inspection contract를 자동화에 연결
-- chat session에 저장된 workflow run 목록, saved message/workflow target/retry workflow, step별 output/tools/artifacts/decisions/dependencies/issues 상세
+- chat session에 저장된 workflow run 목록, saved message/workflow target/source project/retry workflow/run options, step별 output/tools/artifacts/decisions/dependencies/issues 상세
 - TUI 안에서는 `/runs`로 chat run 목록을 열고, `/details 1`로 번호 기반 상세를 확인하고, `/retry 1`로 저장된 task를 재실행
-- 저장된 chat task를 같은 workflow 이름으로 다시 resolve해서 재실행하는 retry 경로
+- 저장된 chat task를 source project와 saved provider/model/config/agents/policy/timeout 옵션을 우선 사용해 재실행하는 retry 경로
 
 ### 3.3 중단 실행 이어서 처리
 
