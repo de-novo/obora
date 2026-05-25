@@ -120,7 +120,7 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
     group: "run",
   },
   {
-    command: "/runs --session <id-or-number>",
+    command: "/runs --session 1 or /runs --session <id>",
     description: "lists persisted runs for one session",
     group: "run",
   },

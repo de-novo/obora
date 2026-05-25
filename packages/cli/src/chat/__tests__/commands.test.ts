@@ -55,6 +55,9 @@ describe("chat command metadata", () => {
     expect(chatHelp).toContain(
       "  /details 1 or /details <executionId> - shows latest or selected step results"
     );
+    expect(chatHelp).toContain(
+      "  /runs --session 1 or /runs --session <id> - lists persisted runs for one session"
+    );
     expect(chatHelp).toContain("  /runs failed, /runs --project [path]");
     expect(chatHelp).toContain("/runs --status <queued|running|waiting|suspended|completed|failed|aborted>");
     expect(chatHelp).toContain("  /sessions here or /sessions [tag]");
