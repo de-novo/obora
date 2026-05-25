@@ -471,6 +471,14 @@ describe("renderChatView", () => {
                 name: "code-review",
                 displayPath: ".obora/workflows/code-review.yaml",
               },
+              runOptions: {
+                provider: "openrouter",
+                model: "openrouter/owl-alpha",
+                config: "/repo/.obora/config.yaml",
+                agents: "/repo/agents.yaml",
+                policy: "/repo/policy.yaml",
+                timeout: 2500,
+              },
             },
           ],
         },
@@ -483,6 +491,9 @@ describe("renderChatView", () => {
     expect(plain).toContain("workflow code-review");
     expect(plain).toContain("task summarize the current diff and explain risk");
     expect(plain).toContain("retry code-review");
+    expect(plain).toContain(
+      "options provider openrouter · model openrouter/owl-alpha · timeout 2500ms · files+3"
+    );
     expect(plain).toContain("project /repo");
     expect(plain).toContain("path .obora/workflows/code-review.yaml");
     expect(plain).toContain("viewing run exec-inspected");
@@ -655,6 +666,39 @@ describe("renderChatView", () => {
     expect(plain).toContain("#2 exec-chat-2 completed code-review");
     expect(plain).toContain("task -");
     expect(plain).toContain("retry none");
+  });
+
+  it("renders inspected last-run options in the run detail header", () => {
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-options",
+            cwd: "/repo",
+            dryRun: false,
+          }),
+          lastRunSummary: runSummary,
+          inspectedRunSummary: runSummary,
+          lastRunTask: "perform the release check",
+          lastRunWorkflowLocator: locator,
+          lastRunOptions: {
+            provider: "openrouter",
+            model: "openrouter/owl-alpha",
+            config: "/repo/.obora/config.yaml",
+            agents: "/repo/agents.yaml",
+            policy: "/repo/policy.yaml",
+            timeout: 2500,
+          },
+        },
+        { columns: 120 }
+      )
+    );
+
+    const plain = stripAnsi(output);
+    expect(plain).toContain("run details");
+    expect(plain).toContain(
+      "options provider openrouter · model openrouter/owl-alpha · timeout 2500ms · files+3"
+    );
   });
 
   it("keeps run history retry and compact options readable in narrow terminals", () => {

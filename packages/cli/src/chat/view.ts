@@ -248,6 +248,18 @@ const inspectedRunWorkflow = (
     ? state.lastRunWorkflowLocator
     : undefined);
 
+const inspectedRunOptions = (
+  state: ChatSessionState,
+  summary: WorkflowRunSummary,
+  choice: ChatRunChoice | undefined
+): string | undefined =>
+  formatCompactChatRunOptions(
+    choice?.runOptions ??
+      (state.lastRunSummary?.executionId === summary.executionId
+        ? state.lastRunOptions
+        : undefined)
+  );
+
 const runDetailHeaderLines = (
   state: ChatSessionState,
   summary: WorkflowRunSummary
@@ -255,11 +267,13 @@ const runDetailHeaderLines = (
   const choice = inspectedRunChoice(state, summary);
   const task = inspectedRunTask(state, summary, choice);
   const workflow = inspectedRunWorkflow(state, summary, choice);
+  const options = inspectedRunOptions(state, summary, choice);
   return [
     `${muted("id")} ${summary.executionId}   ${muted("status")} ${summary.status}   ${muted("steps")} ${summary.completedStepCount}/${summary.totalStepCount}`,
     `${muted("workflow")} ${summary.workflowName}   ${formatRunDuration(summary)}`,
     `${muted("task")} ${task ? formatRunTaskPreview(task) : "-"}`,
     `${muted("retry")} ${task && workflow ? workflow.name : "none"}   ${muted("project")} ${compactPath(state.projectRoot ?? state.cwd, 52)}`,
+    ...(options ? [`${muted("options")} ${options}`] : []),
     ...(workflow ? [`${muted("path")} ${compactPath(workflow.displayPath, 72)}`] : []),
     `${muted("summary")} ${summary.message}`,
     `${muted("open")} /details ${summary.executionId}`,
