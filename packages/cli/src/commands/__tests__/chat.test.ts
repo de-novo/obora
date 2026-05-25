@@ -378,6 +378,10 @@ describe("chat command", () => {
         runOptions: {
           provider: "openrouter",
           model: "openrouter/owl-alpha",
+          config: "/repo/.obora/config.yaml",
+          agents: "/repo/agents.yaml",
+          policy: "/repo/policy.yaml",
+          timeout: 2500,
         },
         runWorkflowLocator: {
           id: "project:release-readiness",
@@ -449,7 +453,7 @@ describe("chat command", () => {
         workflowName: "release-readiness",
         task: "prepare release",
         retry: "release-readiness",
-        options: "provider openrouter · model openrouter/owl-alpha",
+        options: "provider openrouter · model openrouter/owl-alpha · timeout 2500ms · files+3",
       }),
       expect.objectContaining({
         executionId: "exec-old",
