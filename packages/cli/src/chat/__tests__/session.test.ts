@@ -865,6 +865,58 @@ describe("chat session", () => {
     expect(workflows.state.workflowChoices?.[0]?.name).toBe("release-readiness");
   });
 
+  it("closes the help panel when opening selection panels", async () => {
+    const listSessions = vi.fn(async () => [
+      {
+        sessionId: "session-b",
+        status: "ready" as const,
+        cwd: "/repo",
+        projectRoot: "/repo",
+        tags: ["ops"],
+        workflowTarget: "release-readiness",
+        messageCount: 4,
+        updatedAt: "2026-05-22T00:00:00.000Z",
+      },
+    ]);
+    const listWorkflowLocators = vi.fn(async () => [locator]);
+    const helped = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      lastRunSummary: buildWorkflowRunSummary(executionResult),
+      showHelpPanel: true,
+    };
+
+    const runs = await handleChatInput({
+      input: "/runs",
+      state: helped,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+    const sessions = await handleChatInput({
+      input: "/sessions",
+      state: helped,
+      resolveWorkflow,
+      runWorkflow,
+      listSessions,
+      commandOptions: { dryRun: true },
+    });
+    const workflows = await handleChatInput({
+      input: "/workflows",
+      state: helped,
+      resolveWorkflow,
+      runWorkflow,
+      listWorkflowLocators,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runs.state.showHelpPanel).toBeUndefined();
+    expect(runs.state.runChoices?.[0]?.runSummary.executionId).toBe("exec-chat-1");
+    expect(sessions.state.showHelpPanel).toBeUndefined();
+    expect(sessions.state.sessionChoices?.[0]?.sessionId).toBe("session-b");
+    expect(workflows.state.showHelpPanel).toBeUndefined();
+    expect(workflows.state.workflowChoices?.[0]?.name).toBe("release-readiness");
+  });
+
   it("opens persisted run details by execution id from chat", async () => {
     const runSummary = buildWorkflowRunSummary(executionResult);
     const findRun = vi.fn(async () => ({

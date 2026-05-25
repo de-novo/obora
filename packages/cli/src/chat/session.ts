@@ -471,6 +471,7 @@ const withRunChoices = (
   runChoices: runChoices.map((choice) => toChatRunChoice(choice, state.sessionId)),
   sessionChoices: undefined,
   workflowChoices: undefined,
+  showHelpPanel: undefined,
 });
 
 const formatSessionTags = (tags: ReadonlyArray<string> | undefined): string =>
@@ -493,6 +494,7 @@ const withSessionChoices = (
   sessionChoices,
   runChoices: undefined,
   workflowChoices: undefined,
+  showHelpPanel: undefined,
 });
 
 const sessionChoiceIndexFromTarget = (target: string): number | undefined =>
@@ -703,6 +705,7 @@ const withWorkflowChoices = (
   workflowChoices,
   runChoices: undefined,
   sessionChoices: undefined,
+  showHelpPanel: undefined,
 });
 
 const withResolvedWorkflow = (
