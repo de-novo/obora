@@ -661,6 +661,7 @@ const formatPersistedRunSummaryLine = (detail: ChatRunDetail, index: number): st
   [
     `${index + 1}. ${detail.runSummary.executionId}`,
     detail.sessionId,
+    detail.projectRoot ? `project ${detail.projectRoot}` : "project -",
     detail.runSummary.workflowName,
     detail.runSummary.status,
     formatRunTaskText(detail.runTask),

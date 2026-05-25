@@ -1545,6 +1545,7 @@ describe("chat session", () => {
     const listRuns = vi.fn(async () => [
       {
         sessionId: "session-a",
+        projectRoot: "/repo/source-project",
         messageId: "assistant:run",
         messageCreatedAt: "2026-05-21T00:00:02.000Z",
         runTask: "perform the release check",
@@ -1559,6 +1560,7 @@ describe("chat session", () => {
       },
       {
         sessionId: "session-b",
+        projectRoot: "/repo/legacy-project",
         messageId: "assistant:old-run",
         messageCreatedAt: "2026-05-20T00:00:02.000Z",
         runTask: "rerun from old metadata",
@@ -1585,6 +1587,7 @@ describe("chat session", () => {
       "exec-chat-old",
     ]);
     expect(listed.state.runChoices?.[0]?.sessionId).toBe("session-a");
+    expect(listed.state.runChoices?.[0]?.projectRoot).toBe("/repo/source-project");
     expect(listed.state.runChoices?.[0]?.source).toBe("persisted");
     expect(listed.state.runChoices?.[0]?.runTask).toBe("perform the release check");
     expect(listed.state.runChoices?.[0]?.runWorkflowLocator).toBe(locator);
@@ -1594,12 +1597,15 @@ describe("chat session", () => {
       timeout: 2500,
     });
     expect(listed.state.runChoices?.[1]?.runTask).toBe("rerun from old metadata");
+    expect(listed.state.runChoices?.[1]?.projectRoot).toBe("/repo/legacy-project");
     expect(listed.state.runChoices?.[1]?.runWorkflowLocator).toBeUndefined();
     expect(listed.state.messages.at(-1)?.content).toContain(
       "Persisted workflow runs (all sessions):"
     );
     expect(listed.state.messages.at(-1)?.content).toContain("exec-chat-1 · session-a");
+    expect(listed.state.messages.at(-1)?.content).toContain("project /repo/source-project");
     expect(listed.state.messages.at(-1)?.content).toContain("exec-chat-old · session-b");
+    expect(listed.state.messages.at(-1)?.content).toContain("project /repo/legacy-project");
     expect(listed.state.messages.at(-1)?.content).toContain("task perform the release check");
     expect(listed.state.messages.at(-1)?.content).toContain("task rerun from old metadata");
     expect(listed.state.messages.at(-1)?.content).toContain("retry release-readiness");
