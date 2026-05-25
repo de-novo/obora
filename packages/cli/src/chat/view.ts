@@ -285,15 +285,15 @@ const renderRunHistoryLine = (
   ].join(" ");
 };
 
-const renderRunHistorySource = (choice: ChatRunChoice): string =>
-  choice.sessionId
+const renderRunHistorySource = (state: ChatSessionState, choice: ChatRunChoice): string =>
+  choice.sessionId && choice.sessionId !== state.sessionId
     ? `${muted("session")} ${choice.sessionId}   ${muted("switch")} /session ${choice.sessionId}`
     : muted("session current");
 
-const renderRunHistoryMeta = (choice: ChatRunChoice): string => {
+const renderRunHistoryMeta = (state: ChatSessionState, choice: ChatRunChoice): string => {
   const summary = runChoiceSummary(choice);
   return [
-    renderRunHistorySource(choice),
+    renderRunHistorySource(state, choice),
     `${muted("started")} ${formatUpdatedTime(summary.startedAt)}`,
     formatRunDuration(summary),
     `${muted("open")} /details ${summary.executionId}`,
@@ -323,7 +323,7 @@ const renderRunHistory = (
             runFilterHint(state),
             ...state.runChoices.slice(0, 8).flatMap((choice, index) => [
               renderRunHistoryLine(state, choice, index),
-              renderRunHistoryMeta(choice),
+              renderRunHistoryMeta(state, choice),
             ]),
           ],
           width

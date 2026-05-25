@@ -311,6 +311,32 @@ describe("renderChatView", () => {
     expect(plain).not.toContain("switch /session");
   });
 
+  it("renders run choices from the active source session as current-session runs", () => {
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "history-session",
+            cwd: "/repo",
+            dryRun: false,
+          }),
+          runChoices: [
+            {
+              runSummary,
+              sessionId: "history-session",
+              source: "persisted",
+            },
+          ],
+        },
+        { columns: 120 }
+      )
+    );
+    const plain = stripAnsi(output);
+
+    expect(plain).toContain("session current");
+    expect(plain).not.toContain("switch /session history-session");
+  });
+
   it("renders legacy run details with missing optional step arrays", () => {
     const legacySummary = JSON.parse(
       JSON.stringify({
