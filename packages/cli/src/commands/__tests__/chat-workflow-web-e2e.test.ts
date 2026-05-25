@@ -2,8 +2,11 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { WorkflowRunSummary } from "@obora/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createInitialChatState } from "../../chat/state.js";
+import { saveChatSessionState } from "../../chat/store.js";
 import { resolveChatWorkflow } from "../../chat/workflow.js";
 import { createCLI } from "../../cli.js";
 import { startWorkflowWebBridge } from "../../workflow-web/server.js";
@@ -65,6 +68,16 @@ interface ChatSessionJson {
 interface ChatSessionGroupJson {
   readonly group?: string;
   readonly sessions?: ReadonlyArray<ChatSessionJson>;
+}
+
+interface ChatRunDetailJson {
+  readonly sessionId?: string;
+  readonly runTask?: string;
+  readonly runWorkflowLocator?: {
+    readonly name?: string;
+    readonly displayPath?: string;
+  };
+  readonly runSummary?: WorkflowRunSummary;
 }
 
 const lastJsonOutput = (): ChatCommandJson =>
@@ -395,6 +408,141 @@ describe("chat command with workflow web saves", () => {
         "release-session",
         "service-session",
       ]);
+    });
+  });
+
+  it("lists and shows persisted chat run details with step metadata", async () => {
+    await withTempProject(async ({ root, workflowPath }) => {
+      const workflowLocator = {
+        id: "project:release-readiness",
+        scope: "project" as const,
+        name: "release-readiness",
+        path: workflowPath,
+        displayPath: ".obora/workflows/release-readiness.yaml",
+        editable: true,
+        sourceDir: join(root, ".obora", "workflows"),
+        stepCount: 2,
+        projectRoot: root,
+      };
+      const runSummary: WorkflowRunSummary = {
+        executionId: "exec-chat-e2e",
+        workflowName: "release-readiness",
+        status: "completed",
+        startedAt: "2026-05-25T09:00:00.000Z",
+        endedAt: "2026-05-25T09:00:02.000Z",
+        durationMs: 2000,
+        completedStepCount: 2,
+        totalStepCount: 2,
+        message: "Workflow completed: 2/2 steps completed.",
+        steps: [
+          {
+            name: "collect",
+            status: "completed",
+            agent: "developer",
+            model: "openrouter/owl-alpha",
+            outputPreview: "Collected repository context.",
+            outputFormat: "text",
+            toolsUsed: ["file_read"],
+            artifacts: ["README.md"],
+            task: "Collect context",
+            methodology: "Standard agent execution",
+            decisions: ["Use project workflow"],
+            issues: [],
+            dependencies: [],
+          },
+          {
+            name: "decide",
+            status: "completed",
+            agent: "reviewer",
+            model: "openrouter/owl-alpha",
+            outputPreview: "Approved the release handoff.",
+            outputFormat: "json",
+            toolsUsed: ["shell"],
+            artifacts: ["release.json"],
+            task: "Decide readiness",
+            methodology: "Policy check",
+            decisions: ["Ready"],
+            issues: [],
+            dependencies: ["collect"],
+          },
+        ],
+      };
+      const baseState = createInitialChatState({
+        sessionId: "run-session",
+        cwd: root,
+        projectRoot: root,
+        tags: ["release"],
+        dryRun: false,
+        workflowTarget: "release-readiness",
+      });
+      await saveChatSessionState({
+        cwd: root,
+        state: {
+          ...baseState,
+          status: "ready",
+          workflowLocator,
+          lastRunCommand: "obora run .obora/workflows/release-readiness.yaml",
+          lastRunTask: "ship release",
+          lastRunWorkflowLocator: workflowLocator,
+          lastRunSummary: runSummary,
+          messages: [
+            ...baseState.messages,
+            {
+              id: "user:run",
+              role: "user",
+              content: "ship release",
+              createdAt: "2026-05-25T09:00:00.000Z",
+            },
+            {
+              id: "assistant:run",
+              role: "assistant",
+              content: runSummary.message,
+              createdAt: "2026-05-25T09:00:02.000Z",
+              runSummary,
+            },
+          ],
+        },
+      });
+
+      await createCLI().parseAsync(["chat", "--list-runs", "--session", "run-session", "--json"], {
+        from: "user",
+      });
+      const runs = lastJsonArrayOutput<ChatRunDetailJson>();
+
+      await createCLI().parseAsync(
+        ["chat", "--show-run", "exec-chat-e2e", "--session", "run-session", "--json"],
+        { from: "user" }
+      );
+      const detail = JSON.parse(
+        String(vi.mocked(console.log).mock.calls.at(-1)?.[0] ?? "{}")
+      ) as unknown as ChatRunDetailJson;
+
+      expect(runs).toHaveLength(1);
+      expect(runs.at(0)).toMatchObject({
+        sessionId: "run-session",
+        runTask: "ship release",
+        runWorkflowLocator: {
+          name: "release-readiness",
+          displayPath: ".obora/workflows/release-readiness.yaml",
+        },
+        runSummary: {
+          executionId: "exec-chat-e2e",
+          workflowName: "release-readiness",
+          completedStepCount: 2,
+          totalStepCount: 2,
+        },
+      });
+      expect(detail.runSummary?.steps.at(0)).toMatchObject({
+        name: "collect",
+        toolsUsed: ["file_read"],
+        artifacts: ["README.md"],
+        decisions: ["Use project workflow"],
+      });
+      expect(detail.runSummary?.steps.at(1)).toMatchObject({
+        name: "decide",
+        outputFormat: "json",
+        dependencies: ["collect"],
+      });
     });
   });
 });
