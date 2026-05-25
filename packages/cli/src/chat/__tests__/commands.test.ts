@@ -48,6 +48,7 @@ describe("chat command metadata", () => {
     expect(chatHelp).toContain("Session:\n");
     expect(chatHelp).toContain("System:\n");
     expect(chatHelp).toContain("/workflow <name-or-path>");
+    expect(chatHelp).toContain("  /retry status - shows what /retry will rerun");
     expect(chatHelp).toContain(
       "  /details [executionId-or-number] - shows latest or selected step results"
     );

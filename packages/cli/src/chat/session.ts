@@ -687,6 +687,18 @@ const formatRetryTarget = (state: ChatSessionState): string =>
     ? `${state.lastRunWorkflowLocator.name} -> ${state.lastRunTask}`
     : "none";
 
+const formatRetryStatusMessage = (state: ChatSessionState): string =>
+  state.lastRunTask && state.lastRunWorkflowLocator
+    ? [
+        "Retry target:",
+        `Workflow: ${state.lastRunWorkflowLocator.name} (${state.lastRunWorkflowLocator.scope})`,
+        `Task: ${state.lastRunTask}`,
+        `Path: ${state.lastRunWorkflowLocator.displayPath}`,
+        `Command: obora run ${state.lastRunWorkflowLocator.displayPath}`,
+        "Run /retry to execute it again.",
+      ].join("\n")
+    : "No retry target is available. Run a workflow task first with /run <task> or open a retryable run with /details.";
+
 const formatSessionStatusMessage = (state: ChatSessionState): string =>
   [
     `Session: ${state.sessionId}`,
@@ -996,6 +1008,13 @@ export const handleChatInput = async ({
           ),
           exit: false,
         };
+  }
+
+  if (trimmed === "/retry status") {
+    return {
+      state: appendAssistant(withoutPanels(state), formatRetryStatusMessage(state)),
+      exit: false,
+    };
   }
 
   if (trimmed === "/runs") {

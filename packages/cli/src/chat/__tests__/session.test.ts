@@ -314,6 +314,38 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("Dry-run completed");
   });
 
+  it("shows the current retry target without running it", async () => {
+    vi.clearAllMocks();
+    const selected = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      workflowLocator: codeReviewLocator,
+      lastRunTask: "perform the release check",
+      lastRunWorkflowLocator: locator,
+      status: "ready" as const,
+    };
+
+    const result = await handleChatInput({
+      input: "/retry status",
+      state: selected,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(result.state.messages.at(-1)?.content).toContain("Retry target:");
+    expect(result.state.messages.at(-1)?.content).toContain("Workflow: release-readiness (project)");
+    expect(result.state.messages.at(-1)?.content).toContain("Task: perform the release check");
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Path: .obora/workflows/release-readiness.yaml"
+    );
+    expect(result.state.messages.at(-1)?.content).toContain("Run /retry to execute it again.");
+  });
+
   it("explains retry when no previous chat task exists", async () => {
     vi.clearAllMocks();
     const state = createInitialChatState({
@@ -333,6 +365,29 @@ describe("chat session", () => {
     expect(runWorkflow).not.toHaveBeenCalled();
     expect(result.state.messages.at(-1)?.content).toBe(
       "Nothing to retry yet. Run a workflow task first with /run <task>."
+    );
+  });
+
+  it("explains retry status when no retry target exists", async () => {
+    vi.clearAllMocks();
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/retry status",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(result.state.messages.at(-1)?.content).toContain("No retry target is available.");
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "open a retryable run with /details"
     );
   });
 
