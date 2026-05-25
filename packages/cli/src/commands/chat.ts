@@ -1,6 +1,7 @@
 import { Command } from "commander";
 
 import { runChatSession } from "../chat/session.js";
+import { formatChatRunDetail } from "../chat/run-detail-format.js";
 import {
   findChatRunDetail,
   groupChatSessionSummaries,
@@ -145,7 +146,11 @@ export function createChatCommand(): Command {
             if (!detail) {
               throw new CLIError(`Chat run not found: ${options.showRun}`, ExitCode.CLI_ERROR);
             }
-            formatter.json(detail);
+            if (options.json || globalOpts.json) {
+              formatter.json(detail);
+            } else {
+              console.log(formatChatRunDetail(detail));
+            }
             return;
           }
 

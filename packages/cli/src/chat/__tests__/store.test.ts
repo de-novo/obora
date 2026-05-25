@@ -276,6 +276,28 @@ describe("chat session store", () => {
     });
   });
 
+  it("preserves the last run task even when the workflow locator is unavailable", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "obora-chat-store-run-task-"));
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-with-task",
+        cwd,
+        dryRun: false,
+        workflowTarget: "release-readiness",
+      }),
+      lastRunTask: "prepare release",
+      lastRunSummary: runSummary,
+    };
+
+    await saveChatSessionState({ cwd, state });
+
+    await expect(findChatRunDetail({ cwd, executionId: "exec-123" })).resolves.toMatchObject({
+      messageId: "state:lastRunSummary",
+      runTask: "prepare release",
+      runSummary: { executionId: "exec-123" },
+    });
+  });
+
   it("filters persisted run summaries by project, tag, status, and session", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "obora-chat-store-run-filters-"));
     const projectA = join(cwd, "project-a");

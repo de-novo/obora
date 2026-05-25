@@ -259,6 +259,7 @@ describe("chat command", () => {
       messageId: "assistant:run",
       messageCreatedAt: "2026-05-24T00:00:01.000Z",
       workflowTarget: "release-readiness",
+      runTask: "prepare release",
       runSummary: {
         executionId: "exec-123",
         workflowName: "release-readiness",
@@ -269,7 +270,23 @@ describe("chat command", () => {
         completedStepCount: 1,
         totalStepCount: 1,
         message: "Workflow completed: 1/1 steps completed.",
-        steps: [],
+        steps: [
+          {
+            name: "collect",
+            status: "completed",
+            agent: "developer",
+            model: "openrouter/owl-alpha",
+            outputPreview: "Collected repository context.",
+            outputFormat: "text",
+            toolsUsed: ["file_read"],
+            artifacts: ["README.md"],
+            task: "Collect context",
+            methodology: "Inspect persisted session",
+            decisions: ["Use saved chat run"],
+            issues: [],
+            dependencies: [],
+          },
+        ],
       },
     });
 
@@ -282,7 +299,37 @@ describe("chat command", () => {
     expect(findChatRunDetail).toHaveBeenCalledWith(
       expect.objectContaining({ executionId: "exec-123", sessionId: "session-a" })
     );
-    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"executionId": "exec-123"'));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Run exec-123"));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Task: prepare release"));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("tools: file_read"));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("artifacts: README.md"));
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("decisions: Use saved chat run")
+    );
+  });
+
+  it("prints persisted chat run details as JSON when requested", async () => {
+    vi.mocked(findChatRunDetail).mockResolvedValue({
+      sessionId: "session-a",
+      messageId: "assistant:run",
+      messageCreatedAt: "2026-05-24T00:00:01.000Z",
+      runSummary: {
+        executionId: "exec-json",
+        workflowName: "release-readiness",
+        status: "completed",
+        startedAt: "2026-05-24T00:00:00.000Z",
+        completedStepCount: 0,
+        totalStepCount: 0,
+        message: "Workflow completed: 0/0 steps completed.",
+        steps: [],
+      },
+    });
+
+    await createChatCommand().parseAsync(["--show-run", "exec-json", "--json"], {
+      from: "user",
+    });
+
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"executionId": "exec-json"'));
   });
 
   it("lists persisted chat runs without starting the TUI", async () => {

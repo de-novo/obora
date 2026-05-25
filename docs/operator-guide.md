@@ -166,7 +166,7 @@ obora chat --show-run <executionId> --session release-qa
 - repair-loop / triageCause / linked DLQ 기준으로 정렬·필터된 operator view
 - `inspect`를 top-level alias로 바로 써서 특정 실행 상세 조회
 - local/root `--json`으로 같은 persisted-run inspection contract를 자동화에 연결
-- chat session에 저장된 workflow run 목록과 step별 tools/artifacts/decisions/issues 상세
+- chat session에 저장된 workflow run 목록과 step별 output/tools/artifacts/decisions/dependencies/issues 상세
 
 ### 3.3 중단 실행 이어서 처리
 

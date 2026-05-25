@@ -327,12 +327,12 @@ const retryContextForRunSummary = (
   state: ChatSessionState,
   summary: WorkflowRunSummary
 ): Pick<ChatRunDetail, "runTask" | "runWorkflowLocator"> =>
-  state.lastRunSummary?.executionId === summary.executionId &&
-  state.lastRunTask &&
-  state.lastRunWorkflowLocator
+  state.lastRunSummary?.executionId === summary.executionId
     ? {
-        runTask: state.lastRunTask,
-        runWorkflowLocator: state.lastRunWorkflowLocator,
+        ...(state.lastRunTask ? { runTask: state.lastRunTask } : {}),
+        ...(state.lastRunWorkflowLocator
+          ? { runWorkflowLocator: state.lastRunWorkflowLocator }
+          : {}),
       }
     : {};
 
