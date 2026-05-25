@@ -256,6 +256,7 @@ describe("chat command", () => {
   it("shows a persisted chat run selected by execution id", async () => {
     vi.mocked(findChatRunDetail).mockResolvedValue({
       sessionId: "session-a",
+      projectRoot: "/repo/source-project",
       messageId: "assistant:run",
       messageCreatedAt: "2026-05-24T00:00:01.000Z",
       workflowTarget: "release-readiness",
@@ -317,6 +318,9 @@ describe("chat command", () => {
       expect.objectContaining({ executionId: "exec-123", sessionId: "session-a" })
     );
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Run exec-123"));
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("Project: /repo/source-project")
+    );
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining("Message: assistant:run at 2026-05-24T00:00:01.000Z")
     );

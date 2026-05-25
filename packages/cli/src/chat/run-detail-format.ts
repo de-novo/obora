@@ -37,6 +37,7 @@ export const formatChatRunDetail = (detail: ChatRunDetail): string =>
   [
     `Run ${detail.runSummary.executionId}`,
     `Session: ${detail.sessionId}`,
+    ...(detail.projectRoot ? [`Project: ${detail.projectRoot}`] : []),
     `Message: ${detail.messageId} at ${detail.messageCreatedAt}`,
     `Workflow: ${detail.runSummary.workflowName}`,
     `Status: ${detail.runSummary.status}`,
