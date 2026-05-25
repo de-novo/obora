@@ -125,8 +125,29 @@ describe("chat command metadata", () => {
         ],
       })
     ).toEqual([
-      "1  /session <id>  /session rename 1 <id>",
+      "/session 1  /session <id>  /session rename 1 <id>",
       "/session delete 1  /sessions here  /clear",
+    ]);
+    expect(
+      chatPromptCommandRows({
+        ...state,
+        workflowChoices: [
+          {
+            id: "project:release",
+            scope: "project",
+            name: "release-readiness",
+            path: "/repo/.obora/workflows/release-readiness.yaml",
+            displayPath: ".obora/workflows/release-readiness.yaml",
+            editable: true,
+            sourceDir: "/repo/.obora/workflows",
+            stepCount: 1,
+            projectRoot: "/repo",
+          },
+        ],
+      })
+    ).toEqual([
+      "/workflow 1  /workflow <name>  /run #1 <task>",
+      "/workflows [scope]  /project  /clear",
     ]);
   });
 

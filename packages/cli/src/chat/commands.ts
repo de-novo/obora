@@ -198,7 +198,10 @@ export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<st
     ];
   }
   if (state.sessionChoices && state.sessionChoices.length > 0) {
-    return ["1  /session <id>  /session rename 1 <id>", "/session delete 1  /sessions here  /clear"];
+    return [
+      "/session 1  /session <id>  /session rename 1 <id>",
+      "/session delete 1  /sessions here  /clear",
+    ];
   }
   if (state.workflowLocator) {
     return state.lastRunSummary
@@ -206,6 +209,9 @@ export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<st
       : ["/run <task>  /runs  /workflows", "/session  /project  /tags  /help"];
   }
   return state.workflowChoices && state.workflowChoices.length > 0
-    ? ["1  /workflow <name>  /run #1 <task>", "/workflows [scope]  /project  /clear"]
+    ? [
+        "/workflow 1  /workflow <name>  /run #1 <task>",
+        "/workflows [scope]  /project  /clear",
+      ]
     : ["/workflows  /workflow <name-or-path>  /project [path]", "/sessions  /tags  /help"];
 };
