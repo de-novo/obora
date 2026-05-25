@@ -56,6 +56,7 @@ describe("chat command metadata", () => {
       "  /details [executionId-or-number] - shows latest or selected step results"
     );
     expect(chatHelp).toContain("  /runs failed, /runs --project [path]");
+    expect(chatHelp).toContain("  /sessions here or /sessions [tag]");
     expect(chatHelp).toContain("  /clear or /details clear - closes the current panel");
     expect(chatCommandHelpSections.map((section) => section.title)).toEqual([
       "Workflow",
@@ -99,6 +100,24 @@ describe("chat command metadata", () => {
         runChoices: [{ runSummary, sessionId: "session-a" }],
       })
     ).toEqual(["/clear  1  /details <runId>", "/runs  /session  /project  /help"]);
+    expect(
+      chatPromptCommandRows({
+        ...state,
+        sessionChoices: [
+          {
+            sessionId: "session-a",
+            status: "ready",
+            cwd: "/repo",
+            tags: [],
+            messageCount: 1,
+            updatedAt: "2026-05-24T00:00:00.000Z",
+          },
+        ],
+      })
+    ).toEqual([
+      "1  /session <id>  /session rename 1 <id>",
+      "/session delete 1  /sessions here  /clear",
+    ]);
   });
 
   it("keeps run detail clear aliases centralized", () => {

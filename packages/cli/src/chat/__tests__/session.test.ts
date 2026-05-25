@@ -2643,6 +2643,20 @@ describe("chat session", () => {
     expect(result.state.sessionChoices?.map((session) => session.sessionId)).toEqual([
       "project-session",
     ]);
+
+    const shortcut = await handleChatInput({
+      input: "/sessions here",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      listSessions,
+    });
+
+    expect(listSessions).toHaveBeenCalledWith(undefined, "/repo/project-a");
+    expect(shortcut.state.messages.at(-1)?.content).toContain(
+      "Recent sessions for /repo/project-a"
+    );
   });
 
   it("filters listed chat sessions by an explicit project path", async () => {

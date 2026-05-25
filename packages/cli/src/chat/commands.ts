@@ -49,8 +49,8 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
     group: "session",
   },
   {
-    command: "/sessions [tag]",
-    description: "lists recent sessions",
+    command: "/sessions here or /sessions [tag]",
+    description: "lists recent sessions by project or tag",
     group: "session",
   },
   {
@@ -197,7 +197,7 @@ export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<st
     ];
   }
   if (state.sessionChoices && state.sessionChoices.length > 0) {
-    return ["1  /session <id>  /session rename 1 <id>", "/session delete 1  /sessions  /clear"];
+    return ["1  /session <id>  /session rename 1 <id>", "/session delete 1  /sessions here  /clear"];
   }
   if (state.workflowLocator) {
     return state.lastRunSummary

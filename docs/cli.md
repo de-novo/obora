@@ -671,7 +671,7 @@ obora chat --show-run <executionId> [--session <id>]
 - `/retry <executionId-or-number>` reruns a saved chat task; if older run metadata has no workflow locator, Obora resolves the saved workflow name in the current project/global workflow scope.
 - `/session` shows the current session id, project, tags, selected workflow, mode, provider/model, and last run metadata.
 - `/project` shows the current session project root, and `/project <path>` changes it for subsequent workflow discovery.
-- `/sessions` shows recent persisted chat sessions, `/sessions release` filters the list by tag, `/sessions --project` filters by the current project, and `/session 1` or `/session <id>` switches to a listed or known session.
+- `/sessions` shows recent persisted chat sessions, `/sessions release` filters the list by tag, `/sessions here` or `/sessions --project` filters by the current project, and `/session 1` or `/session <id>` switches to a listed or known session.
 - `/session rename <id-or-number> <new-id>` renames a session, and `/session delete <id-or-number>` deletes a non-active session.
 - `/tags` shows the current session tags, `/tags release,qa` updates them, and `/tags --clear` removes them.
 - `/help` prints available chat commands.

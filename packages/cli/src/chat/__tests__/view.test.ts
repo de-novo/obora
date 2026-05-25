@@ -180,6 +180,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("/session 1");
     expect(plain).toContain("/session rename 1 <id>");
     expect(plain).toContain("/session delete 1");
+    expect(plain).toContain("/sessions here");
     expect(plain).toContain("close /clear");
     expect(plain).toContain("● #1 session-a ready release-readiness");
     expect(plain).toContain("○ #2 session-b idle no workflow");

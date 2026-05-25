@@ -149,6 +149,8 @@ const sessionListFilterFromCommand = (
     ? {
         projectRoot: parts[2] ? resolveProjectRootTarget(state, parts[2]) : state.projectRoot ?? state.cwd,
       }
+    : target === "here"
+      ? { projectRoot: state.projectRoot ?? state.cwd }
     : target
       ? { tag: target }
       : {};
