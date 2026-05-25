@@ -460,7 +460,14 @@ const persistedRunScopeText = (filter: RunListFilter): string =>
     .join(", ");
 
 const formatPersistedRunSummaryLine = (detail: ChatRunDetail, index: number): string =>
-  `${index + 1}. ${detail.runSummary.executionId} · ${detail.sessionId} · ${detail.runSummary.workflowName} · ${detail.runSummary.status} · ${detail.runSummary.completedStepCount}/${detail.runSummary.totalStepCount} steps`;
+  [
+    `${index + 1}. ${detail.runSummary.executionId}`,
+    detail.sessionId,
+    detail.runSummary.workflowName,
+    detail.runSummary.status,
+    detail.runTask && detail.runWorkflowLocator ? `retry ${detail.runWorkflowLocator.name}` : "no retry",
+    `${detail.runSummary.completedStepCount}/${detail.runSummary.totalStepCount} steps`,
+  ].join(" · ");
 
 const formatPersistedRunListMessage = (
   details: ReadonlyArray<ChatRunDetail>,
@@ -470,7 +477,7 @@ const formatPersistedRunListMessage = (
     ? [
         `Persisted workflow runs (${persistedRunScopeText(filter)}):`,
         ...details.map(formatPersistedRunSummaryLine),
-        "Use /details 1 to open a run, or /details <executionId>.",
+        "Use /details 1 to open a run, then /retry when retry is available.",
       ].join("\n")
     : `No persisted workflow runs found for ${persistedRunScopeText(filter)}.`;
 

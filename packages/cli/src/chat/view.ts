@@ -321,6 +321,7 @@ const renderRunHistoryMeta = (state: ChatSessionState, choice: ChatRunChoice): s
   const summary = runChoiceSummary(choice);
   return [
     renderRunHistorySource(state, choice),
+    `${muted("retry")} ${choice.runTask && choice.runWorkflowLocator ? choice.runWorkflowLocator.name : "none"}`,
     `${muted("started")} ${formatUpdatedTime(summary.startedAt)}`,
     formatRunDuration(summary),
     `${muted("open")} /details ${summary.executionId}`,

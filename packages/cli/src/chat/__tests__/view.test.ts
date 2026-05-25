@@ -583,6 +583,48 @@ describe("renderChatView", () => {
     expect(plain).toContain("issues Provider returned error");
   });
 
+  it("renders run history retry availability", () => {
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-runs",
+            cwd: "/repo",
+            dryRun: true,
+          }),
+          runChoices: [
+            {
+              runSummary,
+              sessionId: "session-runs",
+              messageId: "assistant:run",
+              source: "persisted",
+              runTask: "perform the release check",
+              runWorkflowLocator: locator,
+            },
+            {
+              runSummary: {
+                ...runSummary,
+                executionId: "exec-chat-2",
+                workflowName: "code-review",
+              },
+              sessionId: "session-other",
+              messageId: "assistant:other",
+              source: "persisted",
+            },
+          ],
+        },
+        { columns: 140 }
+      )
+    );
+
+    const plain = stripAnsi(output);
+    expect(plain).toContain("runs");
+    expect(plain).toContain("#1 exec-chat-1 completed release-readiness");
+    expect(plain).toContain("retry release-readiness");
+    expect(plain).toContain("#2 exec-chat-2 completed code-review");
+    expect(plain).toContain("retry none");
+  });
+
   it.each([
     ["resolving", "resolving"],
     ["completed", "done"],

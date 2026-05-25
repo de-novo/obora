@@ -957,6 +957,8 @@ describe("chat session", () => {
         sessionId: "session-a",
         messageId: "assistant:run",
         messageCreatedAt: "2026-05-21T00:00:02.000Z",
+        runTask: "perform the release check",
+        runWorkflowLocator: locator,
         runSummary,
       },
     ]);
@@ -977,10 +979,16 @@ describe("chat session", () => {
     ]);
     expect(listed.state.runChoices?.[0]?.sessionId).toBe("session-a");
     expect(listed.state.runChoices?.[0]?.source).toBe("persisted");
+    expect(listed.state.runChoices?.[0]?.runTask).toBe("perform the release check");
+    expect(listed.state.runChoices?.[0]?.runWorkflowLocator).toBe(locator);
     expect(listed.state.messages.at(-1)?.content).toContain(
       "Persisted workflow runs (all sessions):"
     );
     expect(listed.state.messages.at(-1)?.content).toContain("exec-chat-1 · session-a");
+    expect(listed.state.messages.at(-1)?.content).toContain("retry release-readiness");
+    expect(listed.state.messages.at(-1)?.content).toContain(
+      "Use /details 1 to open a run, then /retry when retry is available."
+    );
   });
 
   it("closes open run details when opening selection panels", async () => {
