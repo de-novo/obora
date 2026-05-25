@@ -2149,12 +2149,31 @@ describe("chat session", () => {
   });
 
   it("reports missing chat sessions when renaming by id", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
     const renameSession = vi.fn(async (_fromSessionId: string, _toSessionId: string) => undefined);
-    const state = createInitialChatState({
-      sessionId: "session-a",
-      cwd: "/repo",
-      dryRun: true,
-    });
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      workflowChoices: [locator],
+      showHelpPanel: true,
+    };
 
     const result = await handleChatInput({
       input: "/session rename missing renamed",
@@ -2166,6 +2185,11 @@ describe("chat session", () => {
     });
 
     expect(renameSession).toHaveBeenCalledWith("missing", "renamed");
+    expect(result.state.inspectedRunSummary).toBeUndefined();
+    expect(result.state.runChoices).toBeUndefined();
+    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.showHelpPanel).toBeUndefined();
     expect(result.state.messages.at(-1)?.content).toContain("Chat session not found: missing");
   });
 
