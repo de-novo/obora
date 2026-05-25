@@ -535,8 +535,8 @@ const normalizeLoadedSessionState = ({
   dryRun: Boolean(commandOptions.dryRun),
   inspectedRunSummary: current.inspectedRunSummary ?? loaded.inspectedRunSummary,
   runChoices: uniqueRunChoices([
-    ...(current.runChoices ?? []),
     ...(loaded.runChoices ?? []),
+    ...(current.runChoices ?? []),
   ]),
   ...(commandOptions.provider ? { providerName: commandOptions.provider } : {}),
   ...(commandOptions.model ? { modelName: commandOptions.model } : {}),

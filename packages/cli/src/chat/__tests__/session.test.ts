@@ -1462,6 +1462,73 @@ describe("chat session", () => {
     );
   });
 
+  it("prioritizes loaded session run choices after switching sessions", async () => {
+    const currentSummary = buildWorkflowRunSummary(executionResult);
+    const loadedSummary = {
+      ...currentSummary,
+      executionId: "exec-release-session",
+      workflowName: "release-workflow",
+    };
+    const loaded = {
+      ...createInitialChatState({
+        sessionId: "release-session",
+        cwd: "/repo/old",
+        projectRoot: "/repo/release",
+        dryRun: false,
+      }),
+      runChoices: [
+        {
+          runSummary: loadedSummary,
+          sessionId: "release-session",
+          messageId: "assistant:release-run",
+          source: "persisted",
+        },
+      ],
+    };
+    const loadSession = vi.fn(async (_sessionId: string) => loaded);
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      runChoices: [
+        {
+          runSummary: currentSummary,
+          sessionId: "session-a",
+          messageId: "assistant:current-run",
+          source: "persisted",
+        },
+      ],
+    };
+
+    const switched = await handleChatInput({
+      input: "/session release-session",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      loadSession,
+    });
+    const opened = await handleChatInput({
+      input: "/details",
+      state: switched.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      loadSession,
+    });
+
+    expect(switched.state.runChoices?.map((choice) => choice.runSummary.executionId)).toEqual([
+      "exec-release-session",
+      "exec-chat-1",
+    ]);
+    expect(opened.state.inspectedRunSummary).toMatchObject({
+      executionId: "exec-release-session",
+      workflowName: "release-workflow",
+    });
+  });
+
   it("switches to a known chat session id without a numbered list", async () => {
     const loaded = createInitialChatState({
       sessionId: "known-session",
