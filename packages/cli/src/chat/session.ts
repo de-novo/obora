@@ -667,6 +667,9 @@ const formatPersistedRunSummaryLine = (detail: ChatRunDetail, index: number): st
     detail.runTask
       ? `retry ${detail.runWorkflowLocator?.name ?? detail.runSummary.workflowName}`
       : "no retry",
+    formatCompactChatRunOptions(detail.runOptions)
+      ? `options ${formatCompactChatRunOptions(detail.runOptions)}`
+      : "options default",
     `${detail.runSummary.completedStepCount}/${detail.runSummary.totalStepCount} steps`,
   ].join(" · ");
 

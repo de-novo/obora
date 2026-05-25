@@ -1510,6 +1510,12 @@ describe("chat session", () => {
         messageCreatedAt: "2026-05-21T00:00:02.000Z",
         runTask: "perform the release check",
         runWorkflowLocator: locator,
+        runOptions: {
+          provider: "openrouter",
+          model: "openrouter/owl-alpha",
+          config: "/repo/.obora/config.yaml",
+          timeout: 2500,
+        },
         runSummary,
       },
       {
@@ -1543,6 +1549,11 @@ describe("chat session", () => {
     expect(listed.state.runChoices?.[0]?.source).toBe("persisted");
     expect(listed.state.runChoices?.[0]?.runTask).toBe("perform the release check");
     expect(listed.state.runChoices?.[0]?.runWorkflowLocator).toBe(locator);
+    expect(listed.state.runChoices?.[0]?.runOptions).toMatchObject({
+      provider: "openrouter",
+      model: "openrouter/owl-alpha",
+      timeout: 2500,
+    });
     expect(listed.state.runChoices?.[1]?.runTask).toBe("rerun from old metadata");
     expect(listed.state.runChoices?.[1]?.runWorkflowLocator).toBeUndefined();
     expect(listed.state.messages.at(-1)?.content).toContain(
@@ -1553,6 +1564,10 @@ describe("chat session", () => {
     expect(listed.state.messages.at(-1)?.content).toContain("task perform the release check");
     expect(listed.state.messages.at(-1)?.content).toContain("task rerun from old metadata");
     expect(listed.state.messages.at(-1)?.content).toContain("retry release-readiness");
+    expect(listed.state.messages.at(-1)?.content).toContain(
+      "options provider openrouter · model openrouter/owl-alpha · timeout 2500ms · files+1"
+    );
+    expect(listed.state.messages.at(-1)?.content).toContain("options default");
     expect(listed.state.messages.at(-1)?.content).toContain(
       "Use /retry 1 to rerun directly, or /details 1 to inspect first."
     );
