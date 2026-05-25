@@ -346,6 +346,112 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("Run /retry to execute it again.");
   });
 
+  it("retries a run by number from the run history", async () => {
+    vi.clearAllMocks();
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      runChoices: [
+        {
+          runSummary,
+          sessionId: "session-a",
+          messageId: "assistant:run",
+          source: "persisted",
+          runTask: "perform the release check",
+          runWorkflowLocator: locator,
+        },
+      ],
+    };
+
+    const result = await handleChatInput({
+      input: "/retry 1",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflow).toHaveBeenCalledWith(
+      locator.path,
+      expect.objectContaining({
+        input: expect.stringContaining("perform the release check"),
+      })
+    );
+    expect(result.state.lastRunTask).toBe("perform the release check");
+    expect(result.state.lastRunWorkflowLocator).toBe(locator);
+  });
+
+  it("retries a persisted run by execution id", async () => {
+    vi.clearAllMocks();
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const findRun = vi.fn(async () => ({
+      sessionId: "session-a",
+      messageId: "assistant:run",
+      messageCreatedAt: "2026-05-21T00:00:02.000Z",
+      runTask: "perform the release check",
+      runWorkflowLocator: locator,
+      runSummary,
+    }));
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/retry exec-chat-1",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      findRun,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(findRun).toHaveBeenCalledWith("exec-chat-1");
+    expect(runWorkflow).toHaveBeenCalledWith(
+      locator.path,
+      expect.objectContaining({
+        input: expect.stringContaining("perform the release check"),
+      })
+    );
+    expect(result.state.lastRunCommand).toBe("obora run .obora/workflows/release-readiness.yaml");
+  });
+
+  it("does not retry a run without retry metadata", async () => {
+    vi.clearAllMocks();
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      runChoices: [
+        {
+          runSummary,
+          sessionId: "session-a",
+          messageId: "assistant:run",
+          source: "persisted",
+        },
+      ],
+    };
+
+    const result = await handleChatInput({
+      input: "/retry 1",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(result.state.messages.at(-1)?.content).toContain("Run is not retryable: 1.");
+  });
+
   it("explains retry when no previous chat task exists", async () => {
     vi.clearAllMocks();
     const state = createInitialChatState({
@@ -1042,7 +1148,7 @@ describe("chat session", () => {
     expect(listed.state.messages.at(-1)?.content).toContain("exec-chat-1 · session-a");
     expect(listed.state.messages.at(-1)?.content).toContain("retry release-readiness");
     expect(listed.state.messages.at(-1)?.content).toContain(
-      "Use /details 1 to open a run, then /retry when retry is available."
+      "Use /retry 1 to rerun directly, or /details 1 to inspect first."
     );
   });
 

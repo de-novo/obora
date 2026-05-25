@@ -50,6 +50,9 @@ describe("chat command metadata", () => {
     expect(chatHelp).toContain("/workflow <name-or-path>");
     expect(chatHelp).toContain("  /retry status - shows what /retry will rerun");
     expect(chatHelp).toContain(
+      "  /retry 1 or /retry <executionId> - reruns a retryable run from history"
+    );
+    expect(chatHelp).toContain(
       "  /details [executionId-or-number] - shows latest or selected step results"
     );
     expect(chatHelp).toContain("  /clear or /details clear - closes the current panel");

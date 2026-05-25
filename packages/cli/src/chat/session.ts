@@ -91,6 +91,9 @@ const workflowTargetFromCommand = (input: string): string | undefined =>
 const detailsTargetFromCommand = (input: string): string | undefined =>
   input.startsWith("/details ") ? input.slice("/details ".length).trim() : undefined;
 
+const retryTargetFromCommand = (input: string): string | undefined =>
+  input.startsWith("/retry ") ? input.slice("/retry ".length).trim() : undefined;
+
 const runDetailShortcutTargetFromInput = (
   input: string,
   state: ChatSessionState
@@ -330,6 +333,16 @@ const runChoiceEntryAt = (
   index: number
 ): ChatRunChoice | undefined => (index >= 0 && state.runChoices ? state.runChoices[index] : undefined);
 
+const runChoiceEntryForTarget = (
+  state: ChatSessionState,
+  target: string
+): ChatRunChoice | undefined => {
+  const choiceIndex = runChoiceIndexFromTarget(target);
+  return choiceIndex === undefined
+    ? state.runChoices?.find((choice) => runChoiceSummary(choice).executionId === target)
+    : runChoiceEntryAt(state, choiceIndex);
+};
+
 const formatRunSummaryLine = (summary: WorkflowRunSummary, index: number): string =>
   `${index + 1}. ${summary.executionId} · ${summary.workflowName} · ${summary.status} · ${summary.completedStepCount}/${summary.totalStepCount} steps`;
 
@@ -477,7 +490,7 @@ const formatPersistedRunListMessage = (
     ? [
         `Persisted workflow runs (${persistedRunScopeText(filter)}):`,
         ...details.map(formatPersistedRunSummaryLine),
-        "Use /details 1 to open a run, then /retry when retry is available.",
+        "Use /retry 1 to rerun directly, or /details 1 to inspect first.",
       ].join("\n")
     : `No persisted workflow runs found for ${persistedRunScopeText(filter)}.`;
 
@@ -549,6 +562,42 @@ const withRetryContextFromRunDetail = (
         lastRunCommand: `obora run ${runWorkflowLocator.displayPath}`,
       }
     : state;
+};
+
+const retryUnavailableResult = (state: ChatSessionState, target: string): ChatTurnResult => ({
+  state: appendAssistant(
+    withoutPanels(state),
+    `Run is not retryable: ${target}. Open a run with retry metadata from /runs, or run a workflow task first.`
+  ),
+  exit: false,
+});
+
+const retryRunFromContext = ({
+  state,
+  target,
+  choice,
+  persistedDetail,
+  runWorkflow,
+  commandOptions,
+}: {
+  readonly state: ChatSessionState;
+  readonly target: string;
+  readonly choice?: ChatRunChoice;
+  readonly persistedDetail?: ChatRunDetail;
+  readonly runWorkflow: typeof runRun;
+  readonly commandOptions: ChatCommandOptions;
+}): Promise<ChatTurnResult> | ChatTurnResult => {
+  const runTask = choice?.runTask ?? persistedDetail?.runTask;
+  const runWorkflowLocator = choice?.runWorkflowLocator ?? persistedDetail?.runWorkflowLocator;
+  return runTask && runWorkflowLocator
+    ? runChatTask({
+        state: withRetryContextFromRunDetail(state, choice, persistedDetail),
+        workflowLocator: runWorkflowLocator,
+        message: runTask,
+        runWorkflow,
+        commandOptions,
+      })
+    : retryUnavailableResult(state, target);
 };
 
 const sessionChoiceIndexFromTarget = (target: string): number | undefined =>
@@ -1015,6 +1064,41 @@ export const handleChatInput = async ({
       state: appendAssistant(withoutPanels(state), formatRetryStatusMessage(state)),
       exit: false,
     };
+  }
+
+  const retryTarget = retryTargetFromCommand(trimmed);
+  if (retryTarget && retryTarget !== "status") {
+    const choice = runChoiceEntryForTarget(state, retryTarget);
+    return choice
+      ? retryRunFromContext({
+          state,
+          target: retryTarget,
+          choice,
+          runWorkflow,
+          commandOptions,
+        })
+      : (findRun
+          ? findRun(retryTarget)
+          : findChatRunDetail({ cwd: state.cwd, executionId: retryTarget })
+        )
+          .then((detail): Promise<ChatTurnResult> | ChatTurnResult =>
+            detail
+              ? retryRunFromContext({
+                  state,
+                  target: retryTarget,
+                  persistedDetail: detail,
+                  runWorkflow,
+                  commandOptions,
+                })
+              : {
+                  state: appendAssistant(
+                    withoutPanels(state),
+                    `Run details not found: ${retryTarget}`
+                  ),
+                  exit: false,
+                }
+          )
+          .catch((error: unknown): ChatTurnResult => listFailureResult(state, "Run lookup", error));
   }
 
   if (trimmed === "/runs") {

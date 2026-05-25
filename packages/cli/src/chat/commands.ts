@@ -94,6 +94,11 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
     group: "workflow",
   },
   {
+    command: "/retry 1 or /retry <executionId>",
+    description: "reruns a retryable run from history",
+    group: "run",
+  },
+  {
     command: "/run #1 <task>",
     description: "runs one task with a listed workflow",
     group: "workflow",
