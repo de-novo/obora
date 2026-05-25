@@ -478,7 +478,9 @@ const formatPersistedRunSummaryLine = (detail: ChatRunDetail, index: number): st
     detail.sessionId,
     detail.runSummary.workflowName,
     detail.runSummary.status,
-    detail.runTask && detail.runWorkflowLocator ? `retry ${detail.runWorkflowLocator.name}` : "no retry",
+    detail.runTask
+      ? `retry ${detail.runWorkflowLocator?.name ?? detail.runSummary.workflowName}`
+      : "no retry",
     `${detail.runSummary.completedStepCount}/${detail.runSummary.totalStepCount} steps`,
   ].join(" · ");
 
@@ -577,6 +579,7 @@ const retryRunFromContext = ({
   target,
   choice,
   persistedDetail,
+  resolveWorkflow,
   runWorkflow,
   commandOptions,
 }: {
@@ -584,20 +587,34 @@ const retryRunFromContext = ({
   readonly target: string;
   readonly choice?: ChatRunChoice;
   readonly persistedDetail?: ChatRunDetail;
+  readonly resolveWorkflow: (
+    target: string,
+    projectRoot?: string
+  ) => Promise<WorkflowLocator>;
   readonly runWorkflow: typeof runRun;
   readonly commandOptions: ChatCommandOptions;
 }): Promise<ChatTurnResult> | ChatTurnResult => {
-  const runTask = choice?.runTask ?? persistedDetail?.runTask;
-  const runWorkflowLocator = choice?.runWorkflowLocator ?? persistedDetail?.runWorkflowLocator;
-  return runTask && runWorkflowLocator
-    ? runChatTask({
-        state: withRetryContextFromRunDetail(state, choice, persistedDetail),
-        workflowLocator: runWorkflowLocator,
-        message: runTask,
-        runWorkflow,
-        commandOptions,
-      })
-    : retryUnavailableResult(state, target);
+  const retryContext = choice ?? persistedDetail;
+  const retryState = withRetryContextFromRunDetail(state, choice, persistedDetail);
+  if (!retryContext?.runTask) {
+    return retryUnavailableResult(state, target);
+  }
+  const runTask = retryContext.runTask;
+  const runResolvedWorkflow = (workflowLocator: WorkflowLocator): Promise<ChatTurnResult> =>
+    runChatTask({
+      state: retryState,
+      workflowLocator,
+      message: runTask,
+      runWorkflow,
+      commandOptions,
+    });
+  return retryContext.runWorkflowLocator
+    ? runResolvedWorkflow(retryContext.runWorkflowLocator)
+    : resolveWorkflow(retryContext.runSummary.workflowName, state.projectRoot)
+        .then(runResolvedWorkflow)
+        .catch((error: unknown): ChatTurnResult =>
+          workflowResolveFailureResult(retryState, error)
+        );
 };
 
 const sessionChoiceIndexFromTarget = (target: string): number | undefined =>
@@ -1074,6 +1091,7 @@ export const handleChatInput = async ({
           state,
           target: retryTarget,
           choice,
+          resolveWorkflow,
           runWorkflow,
           commandOptions,
         })
@@ -1087,6 +1105,7 @@ export const handleChatInput = async ({
                   state,
                   target: retryTarget,
                   persistedDetail: detail,
+                  resolveWorkflow,
                   runWorkflow,
                   commandOptions,
                 })

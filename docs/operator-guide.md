@@ -157,6 +157,7 @@ obora inspect <runId>
 obora --json inspect <runId>
 obora chat --list-runs --filter-tag release --filter-run-status completed --json
 obora chat --show-run <executionId> --session release-qa
+obora chat --session release-qa --once "/retry <executionId>"
 ```
 
 보는 것:
@@ -167,6 +168,7 @@ obora chat --show-run <executionId> --session release-qa
 - `inspect`를 top-level alias로 바로 써서 특정 실행 상세 조회
 - local/root `--json`으로 같은 persisted-run inspection contract를 자동화에 연결
 - chat session에 저장된 workflow run 목록과 step별 output/tools/artifacts/decisions/dependencies/issues 상세
+- 저장된 chat task를 같은 workflow 이름으로 다시 resolve해서 재실행하는 retry 경로
 
 ### 3.3 중단 실행 이어서 처리
 

@@ -666,6 +666,7 @@ obora chat --show-run <executionId> [--session <id>]
 - `/run <task>` runs the current workflow with an explicit task message.
 - `/run --workflow <name-or-path> <task>` runs one task with a different workflow without changing the session default.
 - `/details <executionId>` shows the recorded step outputs, tools, artifacts, decisions, and issues for a prior workflow result in the current session.
+- `/retry <executionId-or-number>` reruns a saved chat task; if older run metadata has no workflow locator, Obora resolves the saved workflow name in the current project/global workflow scope.
 - `/session` shows the current session id, project, tags, selected workflow, mode, provider/model, and last run metadata.
 - `/project` shows the current session project root, and `/project <path>` changes it for subsequent workflow discovery.
 - `/sessions` shows recent persisted chat sessions, `/sessions release` filters the list by tag, `/sessions --project` filters by the current project, and `/session 1` or `/session <id>` switches to a listed or known session.
