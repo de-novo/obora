@@ -33,6 +33,7 @@ export interface ChatRunDetail {
   readonly workflowTarget?: string;
   readonly runTask?: string;
   readonly runWorkflowLocator?: WorkflowLocator;
+  readonly runOptions?: ChatMessage["runOptions"];
   readonly runSummary: WorkflowRunSummary;
 }
 
@@ -327,13 +328,14 @@ const chatRunDetailFromState =
 const retryContextForRunSummary = (
   state: ChatSessionState,
   summary: WorkflowRunSummary
-): Pick<ChatRunDetail, "runTask" | "runWorkflowLocator"> =>
+): Pick<ChatRunDetail, "runTask" | "runWorkflowLocator" | "runOptions"> =>
   state.lastRunSummary?.executionId === summary.executionId
     ? {
         ...(state.lastRunTask ? { runTask: state.lastRunTask } : {}),
         ...(state.lastRunWorkflowLocator
           ? { runWorkflowLocator: state.lastRunWorkflowLocator }
           : {}),
+        ...(state.lastRunOptions ? { runOptions: state.lastRunOptions } : {}),
       }
     : {};
 
@@ -365,11 +367,12 @@ const messageWorkflowTarget = (
 const messageRetryContext = (
   state: ChatSessionState,
   message: ChatMessage
-): Pick<ChatRunDetail, "runTask" | "runWorkflowLocator"> =>
-  message.runTask || message.runWorkflowLocator
+): Pick<ChatRunDetail, "runTask" | "runWorkflowLocator" | "runOptions"> =>
+  message.runTask || message.runWorkflowLocator || message.runOptions
     ? {
         ...(message.runTask ? { runTask: message.runTask } : {}),
         ...(message.runWorkflowLocator ? { runWorkflowLocator: message.runWorkflowLocator } : {}),
+        ...(message.runOptions ? { runOptions: message.runOptions } : {}),
       }
     : message.runSummary
       ? retryContextForRunSummary(state, message.runSummary)

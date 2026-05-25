@@ -280,6 +280,67 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("Workflow run completed");
   });
 
+  it("stores run option metadata and reuses it for retry", async () => {
+    vi.clearAllMocks();
+    const selected = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: false,
+      }),
+      workflowLocator: locator,
+      status: "ready" as const,
+    };
+    const ran = await handleChatInput({
+      input: "/run perform the release check",
+      state: selected,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: {
+        provider: "openrouter",
+        model: "openrouter/owl-alpha",
+        config: "/repo/.obora/config.yaml",
+        agents: "/repo/agents.yaml",
+        policy: "/repo/policy.yaml",
+        timeout: "2500",
+      },
+    });
+
+    expect(ran.state.messages.at(-1)).toMatchObject({
+      runOptions: {
+        provider: "openrouter",
+        model: "openrouter/owl-alpha",
+        config: "/repo/.obora/config.yaml",
+        agents: "/repo/agents.yaml",
+        policy: "/repo/policy.yaml",
+        timeout: 2500,
+      },
+    });
+
+    vi.clearAllMocks();
+    await handleChatInput({
+      input: "/retry",
+      state: ran.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflow).toHaveBeenCalledWith(
+      locator.path,
+      expect.objectContaining({
+        dryRun: true,
+        provider: "openrouter",
+        model: "openrouter/owl-alpha",
+        config: "/repo/.obora/config.yaml",
+        agents: "/repo/agents.yaml",
+        policy: "/repo/policy.yaml",
+        timeout: 2500,
+        input: expect.stringContaining("perform the release check"),
+      })
+    );
+  });
+
   it("retries the last chat task with the original workflow", async () => {
     vi.clearAllMocks();
     const selected = {

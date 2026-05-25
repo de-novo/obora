@@ -13,7 +13,17 @@ export interface ChatMessage {
   readonly workflowTarget?: string;
   readonly runTask?: string;
   readonly runWorkflowLocator?: WorkflowLocator;
+  readonly runOptions?: ChatRunOptions;
   readonly runSummary?: WorkflowRunSummary;
+}
+
+export interface ChatRunOptions {
+  readonly provider?: string;
+  readonly model?: string;
+  readonly config?: string;
+  readonly agents?: string;
+  readonly policy?: string;
+  readonly timeout?: number;
 }
 
 export interface ChatRunChoice {
@@ -24,6 +34,7 @@ export interface ChatRunChoice {
   readonly source?: string;
   readonly runTask?: string;
   readonly runWorkflowLocator?: WorkflowLocator;
+  readonly runOptions?: ChatRunOptions;
 }
 
 export interface ChatSessionState {
@@ -44,6 +55,7 @@ export interface ChatSessionState {
   readonly lastRunCommand?: string;
   readonly lastRunTask?: string;
   readonly lastRunWorkflowLocator?: WorkflowLocator;
+  readonly lastRunOptions?: ChatRunOptions;
   readonly lastRunSummary?: WorkflowRunSummary;
   readonly inspectedRunSummary?: WorkflowRunSummary;
   readonly runChoices?: ReadonlyArray<ChatRunChoice>;

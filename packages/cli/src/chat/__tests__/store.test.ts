@@ -59,6 +59,12 @@ describe("chat session store", () => {
       }),
       status: "ready" as const,
       lastRunTask: "perform the release check",
+      lastRunOptions: {
+        provider: "openrouter",
+        model: "openrouter/owl-alpha",
+        config: join(cwd, ".obora", "config.yaml"),
+        timeout: 2500,
+      },
       lastRunWorkflowLocator: {
         id: "project:release-readiness",
         scope: "project" as const,
@@ -232,6 +238,12 @@ describe("chat session store", () => {
         workflowTarget: "release-readiness",
       }),
       lastRunTask: "perform the release check",
+      lastRunOptions: {
+        provider: "openrouter",
+        model: "openrouter/owl-alpha",
+        config: join(cwd, ".obora", "config.yaml"),
+        timeout: 2500,
+      },
       lastRunWorkflowLocator: {
         id: "project:release-readiness",
         scope: "project" as const,
@@ -250,6 +262,12 @@ describe("chat session store", () => {
           role: "assistant" as const,
           content: "Workflow completed.",
           createdAt: "2026-05-24T00:00:01.000Z",
+          runOptions: {
+            provider: "openrouter",
+            model: "openrouter/owl-alpha",
+            config: join(cwd, ".obora", "config.yaml"),
+            timeout: 2500,
+          },
           runSummary: messageRun,
         },
       ],
@@ -262,12 +280,24 @@ describe("chat session store", () => {
         sessionId: "session-with-runs",
         projectRoot: cwd,
         messageId: "state:lastRunSummary",
+        runOptions: {
+          provider: "openrouter",
+          model: "openrouter/owl-alpha",
+          config: join(cwd, ".obora", "config.yaml"),
+          timeout: 2500,
+        },
         runSummary: expect.objectContaining({ executionId: "exec-last" }),
       }),
       expect.objectContaining({
         sessionId: "session-with-runs",
         projectRoot: cwd,
         messageId: "assistant:run",
+        runOptions: {
+          provider: "openrouter",
+          model: "openrouter/owl-alpha",
+          config: join(cwd, ".obora", "config.yaml"),
+          timeout: 2500,
+        },
         runSummary: expect.objectContaining({ executionId: "exec-message" }),
       }),
     ]);
@@ -277,6 +307,12 @@ describe("chat session store", () => {
       messageId: "state:lastRunSummary",
       runTask: "perform the release check",
       runWorkflowLocator: { name: "release-readiness" },
+      runOptions: {
+        provider: "openrouter",
+        model: "openrouter/owl-alpha",
+        config: join(cwd, ".obora", "config.yaml"),
+        timeout: 2500,
+      },
       runSummary: { executionId: "exec-last" },
     });
   });

@@ -34,6 +34,7 @@ import type {
   ChatCommandOptions,
   ChatMessage,
   ChatRunChoice,
+  ChatRunOptions,
   ChatSessionState,
 } from "./types.js";
 import {
@@ -74,6 +75,7 @@ interface ChatRunMessageContext {
   readonly workflowTarget: string;
   readonly runTask: string;
   readonly runWorkflowLocator: WorkflowLocator;
+  readonly runOptions?: ChatRunOptions;
 }
 
 interface SessionListFilter {
@@ -252,6 +254,15 @@ const commandRunOptions = (options: ChatCommandOptions): Record<string, unknown>
   ...(options.timeout ? { timeout: parseChatTimeout(options.timeout) } : {}),
 });
 
+const chatRunOptionsFromCommandOptions = (options: ChatCommandOptions): ChatRunOptions => ({
+  ...(options.provider ? { provider: options.provider } : {}),
+  ...(options.model ? { model: options.model } : {}),
+  ...(options.config ? { config: options.config } : {}),
+  ...(options.agents ? { agents: options.agents } : {}),
+  ...(options.policy ? { policy: options.policy } : {}),
+  ...(options.timeout ? { timeout: parseChatTimeout(options.timeout) } : {}),
+});
+
 const appendAssistant = (
   state: ChatSessionState,
   content: string,
@@ -263,6 +274,7 @@ const appendAssistant = (
     ...(runContext ? { workflowTarget: runContext.workflowTarget } : {}),
     ...(runContext ? { runTask: runContext.runTask } : {}),
     ...(runContext ? { runWorkflowLocator: runContext.runWorkflowLocator } : {}),
+    ...(runContext?.runOptions ? { runOptions: runContext.runOptions } : {}),
     ...(runSummary ? { runSummary } : {}),
   });
 
@@ -342,6 +354,7 @@ const findRunChoiceInState = (
               ...(message.runWorkflowLocator
                 ? { runWorkflowLocator: message.runWorkflowLocator }
                 : {}),
+              ...(message.runOptions ? { runOptions: message.runOptions } : {}),
             },
           ]
         : []
@@ -356,19 +369,21 @@ const findRunChoiceInState = (
         ...(state.lastRunWorkflowLocator
           ? { runWorkflowLocator: state.lastRunWorkflowLocator }
           : {}),
+        ...(state.lastRunOptions ? { runOptions: state.lastRunOptions } : {}),
       }
     : undefined);
 
 const runChoiceContextForSummary = (
   state: ChatSessionState,
   summary: WorkflowRunSummary
-): Pick<ChatRunChoice, "runTask" | "runWorkflowLocator"> =>
+): Pick<ChatRunChoice, "runTask" | "runWorkflowLocator" | "runOptions"> =>
   state.lastRunSummary?.executionId === summary.executionId
     ? {
         ...(state.lastRunTask ? { runTask: state.lastRunTask } : {}),
         ...(state.lastRunWorkflowLocator
           ? { runWorkflowLocator: state.lastRunWorkflowLocator }
           : {}),
+        ...(state.lastRunOptions ? { runOptions: state.lastRunOptions } : {}),
       }
     : {};
 
@@ -387,6 +402,7 @@ const runChoiceFromMessage = (
           ...(message.runWorkflowLocator
             ? { runWorkflowLocator: message.runWorkflowLocator }
             : {}),
+          ...(message.runOptions ? { runOptions: message.runOptions } : {}),
         },
       ]
     : [];
@@ -710,11 +726,13 @@ const withRetryContextFromRunDetail = (
 ): ChatSessionState => {
   const runTask = choice?.runTask ?? persistedDetail?.runTask;
   const runWorkflowLocator = choice?.runWorkflowLocator ?? persistedDetail?.runWorkflowLocator;
+  const runOptions = choice?.runOptions ?? persistedDetail?.runOptions;
   return runTask && runWorkflowLocator
     ? {
         ...state,
         lastRunTask: runTask,
         lastRunWorkflowLocator: runWorkflowLocator,
+        ...(runOptions ? { lastRunOptions: runOptions } : {}),
         lastRunCommand: `obora run ${runWorkflowLocator.displayPath}`,
       }
     : state;
@@ -759,6 +777,7 @@ const retryRunFromContext = ({
       state: retryState,
       workflowLocator,
       message: runTask,
+      ...(retryContext.runOptions ? { runOptionsOverride: retryContext.runOptions } : {}),
       runWorkflow,
       commandOptions,
     });
@@ -1035,12 +1054,14 @@ const runChatTask = ({
   state,
   workflowLocator,
   message,
+  runOptionsOverride,
   runWorkflow,
   commandOptions,
 }: {
   readonly state: ChatSessionState;
   readonly workflowLocator: WorkflowLocator;
   readonly message: string;
+  readonly runOptionsOverride?: ChatRunOptions;
   readonly runWorkflow: typeof runRun;
   readonly commandOptions: ChatCommandOptions;
 }): Promise<ChatTurnResult> => {
@@ -1054,8 +1075,12 @@ const runChatTask = ({
   });
   const lastRunCommand = `obora run ${workflowLocator.displayPath}`;
   const workflowTarget = state.workflowTarget ?? workflowLocator.displayPath;
+  const runMetadataOptions =
+    runOptionsOverride ?? chatRunOptionsFromCommandOptions(commandOptions);
+  const hasRunMetadataOptions = Object.keys(runMetadataOptions).length > 0;
   const runOptions = {
     ...commandRunOptions(commandOptions),
+    ...(runOptionsOverride ?? {}),
     input: runInput,
   };
 
@@ -1069,17 +1094,17 @@ const runChatTask = ({
             lastRunCommand,
             lastRunTask: message,
             lastRunWorkflowLocator: workflowLocator,
+            ...(hasRunMetadataOptions ? { lastRunOptions: runMetadataOptions } : {}),
             ...(runSummary ? { lastRunSummary: runSummary } : {}),
           },
           formatRunSummaryMessage(runSummary, commandOptions.dryRun),
           runSummary,
-          runSummary
-            ? {
-                workflowTarget,
-                runTask: message,
-                runWorkflowLocator: workflowLocator,
-              }
-            : undefined
+          {
+            workflowTarget,
+            runTask: message,
+            runWorkflowLocator: workflowLocator,
+            ...(hasRunMetadataOptions ? { runOptions: runMetadataOptions } : {}),
+          }
         ),
         exit: false,
       };
@@ -1093,6 +1118,7 @@ const runChatTask = ({
             lastRunCommand,
             lastRunTask: message,
             lastRunWorkflowLocator: workflowLocator,
+            ...(hasRunMetadataOptions ? { lastRunOptions: runMetadataOptions } : {}),
           },
           `Workflow run failed: ${failureMessage}`
         ),
@@ -1229,6 +1255,7 @@ export const handleChatInput = async ({
           state,
           workflowLocator: retryWorkflowLocator,
           message: state.lastRunTask,
+          ...(state.lastRunOptions ? { runOptionsOverride: state.lastRunOptions } : {}),
           runWorkflow,
           commandOptions,
         })
