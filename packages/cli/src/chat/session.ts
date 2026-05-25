@@ -454,8 +454,23 @@ const runChoiceEntryForTarget = (
     : runChoiceEntryAt(state, choiceIndex);
 };
 
-const formatRunSummaryLine = (summary: WorkflowRunSummary, index: number): string =>
-  `${index + 1}. ${summary.executionId} · ${summary.workflowName} · ${summary.status} · ${summary.completedStepCount}/${summary.totalStepCount} steps`;
+const formatRunChoiceSummaryLine = (choice: ChatRunChoice, index: number): string => {
+  const summary = runChoiceSummary(choice);
+  return [
+    `${index + 1}. ${summary.executionId}`,
+    choice.sessionId,
+    summary.workflowName,
+    summary.status,
+    formatRunTaskText(choice.runTask),
+    choice.runTask ? `retry ${choice.runWorkflowLocator?.name ?? summary.workflowName}` : "no retry",
+    formatCompactChatRunOptions(choice.runOptions)
+      ? `options ${formatCompactChatRunOptions(choice.runOptions)}`
+      : "options default",
+    `${summary.completedStepCount}/${summary.totalStepCount} steps`,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" · ");
+};
 
 const openedRunDetailsMessage = (
   summary: WorkflowRunSummary,
@@ -573,11 +588,11 @@ const withHelpPanel = (state: ChatSessionState): ChatSessionState => ({
   showHelpPanel: true,
 });
 
-const formatRunListMessage = (summaries: ReadonlyArray<WorkflowRunSummary>): string =>
-  summaries.length > 0
+const formatRunListMessage = (choices: ReadonlyArray<ChatRunChoice>): string =>
+  choices.length > 0
     ? [
         "Recent workflow runs:",
-        ...summaries.map(formatRunSummaryLine),
+        ...choices.map(formatRunChoiceSummaryLine),
         "Type 1 to open a run, or use /details <executionId>.",
       ].join("\n")
     : "No workflow runs found in this chat session.";
@@ -1330,12 +1345,8 @@ export const handleChatInput = async ({
 
   if (trimmed === "/runs") {
     const choices = runChoicesFromState(state);
-    const summaries = choices.map(runChoiceSummary);
     return {
-      state: appendAssistant(
-        withRunChoices(state, choices),
-        formatRunListMessage(summaries)
-      ),
+      state: appendAssistant(withRunChoices(state, choices), formatRunListMessage(choices)),
       exit: false,
     };
   }

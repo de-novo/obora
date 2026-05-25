@@ -1257,6 +1257,11 @@ describe("chat session", () => {
       "exec-chat-1",
     ]);
     expect(listed.state.messages.at(-1)?.content).toContain("Recent workflow runs:");
+    expect(listed.state.messages.at(-1)?.content).toContain("task perform the release check");
+    expect(listed.state.messages.at(-1)?.content).toContain("retry release-readiness");
+    expect(listed.state.messages.at(-1)?.content).toContain(
+      "options provider openrouter · model openrouter/owl-alpha"
+    );
     expect(listed.state.messages.at(-1)?.content).toContain("Type 1 to open a run");
     expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
     expect(opened.state.messages.at(-1)?.content).toContain("Opened run details exec-chat-1.");
