@@ -1,10 +1,11 @@
-import type { WorkflowLocator } from "@obora/sdk";
+import type { WorkflowLocator, WorkflowResolveRequest } from "@obora/sdk";
 
 export type WorkflowWebMode = "view" | "build";
 
 export interface WorkflowWebBridgeOptions {
   readonly locator: WorkflowLocator;
   readonly mode: WorkflowWebMode;
+  readonly resolveRequest?: WorkflowResolveRequest;
   readonly host?: string;
   readonly port?: number;
   readonly token?: string;

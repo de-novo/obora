@@ -3,7 +3,8 @@ import { randomBytes } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { stringify as stringifyYaml } from "yaml";
 
-import { readWorkflow } from "@obora/sdk";
+import { discoverWorkflowLocators, readWorkflow, resolveWorkflowTarget } from "@obora/sdk";
+import type { WorkflowResolveIntent, WorkflowResolveRequest, WorkflowResolveScope } from "@obora/sdk";
 
 import { renderWorkflowWebHtml } from "./html.js";
 import type { WorkflowWebBridgeHandle, WorkflowWebBridgeOptions } from "./types.js";
@@ -43,6 +44,12 @@ const sendError = (response: ServerResponse, statusCode: number, message: string
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isWorkflowResolveScope = (value: unknown): value is WorkflowResolveScope =>
+  value === "project" || value === "global" || value === "all";
+
+const isWorkflowResolveIntent = (value: unknown): value is WorkflowResolveIntent =>
+  value === "view" || value === "build" || value === "run";
+
 const parseBodyAsRecord = async (request: IncomingMessage): Promise<Record<string, unknown>> => {
   const raw = await readRequestBody(request);
   const parsed = JSON.parse(raw.length > 0 ? raw : "{}") as unknown;
@@ -74,6 +81,72 @@ const yamlFromSaveBody = (body: Record<string, unknown>): string =>
         sortMapEntries: false,
       });
 
+const baseResolveRequest = (options: WorkflowWebBridgeOptions): WorkflowResolveRequest => ({
+  ...(options.resolveRequest ?? {}),
+  cwd: options.resolveRequest?.cwd ?? options.locator.projectRoot ?? process.cwd(),
+  ...(options.resolveRequest?.projectRoot
+    ? { projectRoot: options.resolveRequest.projectRoot }
+    : options.locator.projectRoot
+      ? { projectRoot: options.locator.projectRoot }
+      : {}),
+  ...(options.resolveRequest?.globalWorkflowDir
+    ? { globalWorkflowDir: options.resolveRequest.globalWorkflowDir }
+    : {}),
+  ...(options.resolveRequest?.projectWorkflowDirs
+    ? { projectWorkflowDirs: options.resolveRequest.projectWorkflowDirs }
+    : {}),
+});
+
+const requestScope = (
+  url: URL,
+  fallback: WorkflowResolveRequest["scope"]
+): WorkflowResolveRequest["scope"] => {
+  const scope = url.searchParams.get("scope");
+  return isWorkflowResolveScope(scope) ? scope : fallback;
+};
+
+const resolveRequestFromBody = async (
+  request: IncomingMessage,
+  options: WorkflowWebBridgeOptions
+): Promise<WorkflowResolveRequest> => {
+  const body = await parseBodyAsRecord(request);
+  const target = typeof body.target === "string" ? body.target : undefined;
+  const scope = isWorkflowResolveScope(body.scope) ? body.scope : baseResolveRequest(options).scope;
+  const intent = isWorkflowResolveIntent(body.intent) ? body.intent : options.mode;
+  return {
+    ...baseResolveRequest(options),
+    ...(target ? { target } : {}),
+    ...(scope ? { scope } : {}),
+    intent,
+  };
+};
+
+const handleWorkflowListRequest = async (
+  url: URL,
+  response: ServerResponse,
+  options: WorkflowWebBridgeOptions
+): Promise<void> => {
+  const request = baseResolveRequest(options);
+  const discovery = await discoverWorkflowLocators({
+    ...request,
+    scope: requestScope(url, request.scope) ?? "all",
+  });
+  sendJson(response, 200, discovery);
+};
+
+const handleWorkflowResolveRequest = async (
+  request: IncomingMessage,
+  response: ServerResponse,
+  options: WorkflowWebBridgeOptions
+): Promise<void> => {
+  if (request.method !== "POST") {
+    sendError(response, 405, "Method not allowed.");
+    return;
+  }
+
+  sendJson(response, 200, await resolveWorkflowTarget(await resolveRequestFromBody(request, options)));
+};
+
 const handleApiRequest = async (
   request: IncomingMessage,
   response: ServerResponse,
@@ -103,7 +176,10 @@ const createWorkflowRequestHandler =
   (options: WorkflowWebBridgeOptions, token: string, baseUrl: string) =>
   async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     const url = new URL(request.url ?? "/", baseUrl);
-    const isApi = url.pathname === "/api/workflow";
+    const isApi =
+      url.pathname === "/api/workflow" ||
+      url.pathname === "/api/workflows" ||
+      url.pathname === "/api/workflows/resolve";
     const authorized = url.searchParams.get("token") === token;
 
     try {
@@ -112,8 +188,18 @@ const createWorkflowRequestHandler =
         return;
       }
 
-      if (isApi) {
+      if (url.pathname === "/api/workflow") {
         await handleApiRequest(request, response, options);
+        return;
+      }
+
+      if (url.pathname === "/api/workflows") {
+        await handleWorkflowListRequest(url, response, options);
+        return;
+      }
+
+      if (url.pathname === "/api/workflows/resolve") {
+        await handleWorkflowResolveRequest(request, response, options);
         return;
       }
 

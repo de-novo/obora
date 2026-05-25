@@ -20,12 +20,15 @@ const withTempWorkflow = async (
   testFn: (input: {
     readonly root: string;
     readonly path: string;
+    readonly globalDir: string;
     readonly locator: WorkflowLocator;
   }) => Promise<void>
 ): Promise<void> => {
   const root = await mkdtemp(join(tmpdir(), "obora-web-"));
   const dir = join(root, ".obora", "workflows");
+  const globalDir = join(root, "global-workflows");
   const path = join(dir, "release-readiness.yaml");
+  const globalPath = join(globalDir, "code-review.yaml");
   const locator: WorkflowLocator = {
     id: "project:test",
     scope: "project",
@@ -40,8 +43,10 @@ const withTempWorkflow = async (
 
   try {
     await mkdir(dir, { recursive: true });
+    await mkdir(globalDir, { recursive: true });
     await writeWorkflow(path, "release-readiness");
-    await testFn({ root, path, locator });
+    await writeWorkflow(globalPath, "code-review");
+    await testFn({ root, path, globalDir, locator });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -92,6 +97,51 @@ describe("workflow web bridge", () => {
 
       expect(htmlResponse.status).toBe(200);
       expect(await htmlResponse.text()).toContain("release-readiness");
+      expect(unauthorizedResponse.status).toBe(401);
+    });
+  });
+
+  it("serves scoped workflow discovery and resolver APIs through the same bridge roots", async () => {
+    await withTempWorkflow(async ({ root, globalDir, locator }) => {
+      const bridge = await startWorkflowWebBridge({
+        locator,
+        mode: "build",
+        open: false,
+        resolveRequest: {
+          cwd: root,
+          projectRoot: root,
+          globalWorkflowDir: globalDir,
+          scope: "all",
+        },
+      });
+      const listResponse = await fetch(
+        `${bridge.apiBaseUrl}/api/workflows?scope=all&token=${bridge.token}`
+      );
+      const resolveResponse = await fetch(
+        `${bridge.apiBaseUrl}/api/workflows/resolve?token=${bridge.token}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ target: "code-review", scope: "global", intent: "view" }),
+        }
+      );
+      const unauthorizedResponse = await fetch(
+        `${bridge.apiBaseUrl}/api/workflows?token=wrong`
+      );
+      const listPayload = await listResponse.json();
+      const resolvePayload = await resolveResponse.json();
+
+      await bridge.close();
+
+      expect(listResponse.status).toBe(200);
+      expect(listPayload).toMatchObject({
+        project: [expect.objectContaining({ name: "release-readiness", scope: "project" })],
+        global: [expect.objectContaining({ name: "code-review", scope: "global" })],
+      });
+      expect(resolvePayload).toMatchObject({
+        status: "resolved",
+        locator: { name: "code-review", scope: "global" },
+      });
       expect(unauthorizedResponse.status).toBe(401);
     });
   });

@@ -202,7 +202,8 @@ async function runWorkflowWebEntry(
   options: WorkflowOptions,
   globalOpts: GlobalOptions
 ): Promise<void> {
-  const result = await resolveWorkflowTarget(buildWorkflowResolveRequest(target, options, intent));
+  const resolveRequest = buildWorkflowResolveRequest(target, options, intent);
+  const result = await resolveWorkflowTarget(resolveRequest);
   if (result.status !== "resolved" || !result.locator) {
     throw new CLIError(
       result.diagnostics.join("\n") || `Workflow ${target ?? ""} could not be resolved.`,
@@ -213,6 +214,7 @@ async function runWorkflowWebEntry(
   const bridge = await startWorkflowWebBridge({
     locator: result.locator,
     mode: webModeForIntent(intent),
+    resolveRequest,
     host: options.host,
     port: parsePort(options.port),
     open: !options.noOpen,
