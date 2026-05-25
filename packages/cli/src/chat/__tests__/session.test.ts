@@ -568,6 +568,45 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("Run is not retryable: 1.");
   });
 
+  it("keeps listed run choices when a numbered retry choice is missing", async () => {
+    vi.clearAllMocks();
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const findRun = vi.fn(async () => undefined);
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      runChoices: [
+        {
+          runSummary,
+          sessionId: "session-a",
+          messageId: "assistant:run",
+          source: "persisted",
+          runTask: "perform the release check",
+          runWorkflowLocator: locator,
+        },
+      ],
+    };
+
+    const result = await handleChatInput({
+      input: "/retry 2",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      findRun,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(findRun).not.toHaveBeenCalled();
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(result.state.runChoices?.map((choice) => choice.runSummary.executionId)).toEqual([
+      "exec-chat-1",
+    ]);
+    expect(result.state.messages.at(-1)?.content).toContain("Run choice not found.");
+  });
+
   it("explains retry when no previous chat task exists", async () => {
     vi.clearAllMocks();
     const state = createInitialChatState({

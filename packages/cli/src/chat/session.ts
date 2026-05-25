@@ -1151,6 +1151,7 @@ export const handleChatInput = async ({
 
   const retryTarget = retryTargetFromCommand(trimmed);
   if (retryTarget && retryTarget !== "status") {
+    const retryChoiceIndex = runChoiceIndexFromTarget(retryTarget);
     const choice = runChoiceEntryForTarget(state, retryTarget);
     return choice
       ? retryRunFromContext({
@@ -1161,6 +1162,14 @@ export const handleChatInput = async ({
           runWorkflow,
           commandOptions,
         })
+      : retryChoiceIndex !== undefined
+        ? {
+            state: appendAssistant(
+              withRunChoicesOnly(state),
+              "Run choice not found. Run /runs first, then use /retry 1."
+            ),
+            exit: false,
+          }
       : (findRun
           ? findRun(retryTarget)
           : findChatRunDetail({ cwd: state.cwd, executionId: retryTarget })
