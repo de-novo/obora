@@ -373,7 +373,7 @@ const runFilterHint = (state: ChatSessionState): string =>
     ...(state.tags && state.tags.length > 0
       ? [`${muted("tag")} /runs --tag ${state.tags[0]}`]
       : [`${muted("tag")} /runs --tag <tag>`]),
-    `${muted("status")} /runs --status failed`,
+    `${muted("status")} /runs failed`,
   ].join("   ");
 
 const renderRunHistory = (

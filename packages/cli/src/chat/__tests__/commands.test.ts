@@ -55,6 +55,7 @@ describe("chat command metadata", () => {
     expect(chatHelp).toContain(
       "  /details [executionId-or-number] - shows latest or selected step results"
     );
+    expect(chatHelp).toContain("  /runs failed, /runs --project [path]");
     expect(chatHelp).toContain("  /clear or /details clear - closes the current panel");
     expect(chatCommandHelpSections.map((section) => section.title)).toEqual([
       "Workflow",

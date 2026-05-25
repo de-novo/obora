@@ -124,7 +124,7 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
     group: "run",
   },
   {
-    command: "/runs --project [path], /runs --tag <tag>, or /runs --status <status>",
+    command: "/runs failed, /runs --project [path], /runs --tag <tag>, or /runs --status <status>",
     description: "filters persisted runs",
     group: "run",
   },

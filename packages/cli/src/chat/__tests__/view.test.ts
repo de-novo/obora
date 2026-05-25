@@ -280,7 +280,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("close /clear");
     expect(plain).toContain("/runs --project");
     expect(plain).toContain("/runs --tag release");
-    expect(plain).toContain("/runs --status failed");
+    expect(plain).toContain("/runs failed");
     expect(plain).toContain("● #1 exec-chat-1 completed release-readiness steps 2/2");
     expect(plain).toContain("○ #2 exec-chat-2 completed code-review steps 1/2");
     expect(plain).toContain("session session-a");

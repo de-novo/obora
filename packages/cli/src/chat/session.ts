@@ -427,6 +427,8 @@ const runListFilterFromCommand = (
 ): RunListFilter | undefined => {
   const parts = commandParts(input);
   const options = parts.slice(1);
+  const statusShortcut =
+    options.length === 1 && options[0] && !options[0].startsWith("--") ? options[0] : undefined;
   const knownOptions = ["--all", "--session", "--project", "--tag", "--status"];
   const hasOption = (option: string): boolean => options.includes(option);
   const optionValue = (option: string): string | undefined => {
@@ -450,7 +452,9 @@ const runListFilterFromCommand = (
     (!hasOption("--tag") || Boolean(optionValue("--tag"))) &&
     (!hasOption("--status") || Boolean(optionValue("--status")));
 
-  return !hasKnownOption || hasUnknownOption || !hasRequiredValue
+  return statusShortcut
+    ? { status: statusShortcut }
+    : !hasKnownOption || hasUnknownOption || !hasRequiredValue
     ? undefined
     : sessionFilter?.missingChoice
       ? { missingChoice: true }
@@ -1141,7 +1145,7 @@ export const handleChatInput = async ({
       return {
         state: appendAssistant(
           withoutPanels(state),
-          "Usage: /runs, /runs --all, /runs --session <id-or-number>, /runs --project [path], /runs --tag <tag>, or /runs --status <status>."
+          "Usage: /runs, /runs failed, /runs --all, /runs --session <id-or-number>, /runs --project [path], /runs --tag <tag>, or /runs --status <status>."
         ),
         exit: false,
       };

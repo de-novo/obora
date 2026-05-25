@@ -1708,7 +1708,7 @@ describe("chat session", () => {
     });
 
     expect(invalid.state.messages.at(-1)?.content).toContain(
-      "Usage: /runs, /runs --all, /runs --session <id-or-number>, /runs --project [path], /runs --tag <tag>, or /runs --status <status>."
+      "Usage: /runs, /runs failed, /runs --all, /runs --session <id-or-number>, /runs --project [path], /runs --tag <tag>, or /runs --status <status>."
     );
     expect(invalid.state.inspectedRunSummary).toBeUndefined();
     expect(invalid.state.runChoices).toBeUndefined();
@@ -1756,6 +1756,45 @@ describe("chat session", () => {
     expect(listed.state.messages.at(-1)?.content).toContain(
       "all sessions, project /repo/packages/cli, tag release, status failed"
     );
+  });
+
+  it("passes persisted run status shortcuts to injected run listing callbacks", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const listRuns = vi.fn(async () => [
+      {
+        sessionId: "session-a",
+        messageId: "assistant:failed-run",
+        messageCreatedAt: "2026-05-22T00:00:02.000Z",
+        runSummary: {
+          ...runSummary,
+          executionId: "exec-failed",
+          status: "failed" as const,
+        },
+      },
+    ]);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const listed = await handleChatInput({
+      input: "/runs failed",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      listRuns,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(listRuns).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ status: "failed" })
+    );
+    expect(listed.state.messages.at(-1)?.content).toContain(
+      "Persisted workflow runs (all sessions, status failed):"
+    );
+    expect(listed.state.runChoices?.[0]?.runSummary.executionId).toBe("exec-failed");
   });
 
   it("keeps chat open when persisted run listing fails", async () => {
@@ -1893,6 +1932,16 @@ describe("chat session", () => {
     expect(byTag.state.messages.at(-1)?.content).toContain("exec-support-failed");
     expect(byStatus.state.messages.at(-1)?.content).toContain("status failed");
     expect(byStatus.state.messages.at(-1)?.content).toContain("exec-support-failed");
+    const byStatusShortcut = await handleChatInput({
+      input: "/runs failed",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(byStatusShortcut.state.messages.at(-1)?.content).toContain("status failed");
+    expect(byStatusShortcut.state.messages.at(-1)?.content).toContain("exec-support-failed");
   });
 
   it("reports empty persisted run lists for a selected session", async () => {
