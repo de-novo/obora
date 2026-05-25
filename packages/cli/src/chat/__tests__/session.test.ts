@@ -2909,7 +2909,7 @@ describe("chat session", () => {
     };
 
     const result = await handleChatInput({
-      input: "/session rename 1 session-c",
+      input: "/session rename 1 session-d",
       state,
       resolveWorkflow,
       runWorkflow,
@@ -2917,15 +2917,18 @@ describe("chat session", () => {
       renameSession,
     });
 
-    expect(renameSession).toHaveBeenCalledWith("session-b", "session-c");
+    expect(renameSession).toHaveBeenCalledWith("session-b", "session-d");
     expect(result.state.sessionId).toBe("session-a");
     expect(result.state.inspectedRunSummary).toBeUndefined();
     expect(result.state.runChoices).toBeUndefined();
-    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.sessionChoices?.map((session) => session.sessionId)).toEqual([
+      "session-d",
+      "session-c",
+    ]);
     expect(result.state.workflowChoices).toBeUndefined();
     expect(result.state.showHelpPanel).toBeUndefined();
     expect(result.state.messages.at(-1)?.content).toContain(
-      "Renamed session session-b to session-c."
+      "Renamed session session-b to session-d."
     );
   });
 

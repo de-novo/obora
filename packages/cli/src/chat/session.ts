@@ -408,6 +408,22 @@ const withoutDeletedSessionChoice = (
   };
 };
 
+const withRenamedSessionChoice = (
+  state: ChatSessionState,
+  fromSessionId: string,
+  toSessionId: string
+): ChatSessionState => {
+  const nextSessionChoices = state.sessionChoices?.map((summary) =>
+    summary.sessionId === fromSessionId ? { ...summary, sessionId: toSessionId } : summary
+  );
+  return {
+    ...withoutPanels(state),
+    ...(nextSessionChoices && nextSessionChoices.length > 0
+      ? { sessionChoices: nextSessionChoices }
+      : {}),
+  };
+};
+
 const hasPickerPanel = (state: ChatSessionState): boolean =>
   Boolean(
     (state.runChoices && state.runChoices.length > 0) ||
@@ -1245,12 +1261,13 @@ export const handleChatInput = async ({
     const renameCommand = sessionRenameFromCommand(sessionTarget);
     if (renameCommand) {
       const target = sessionIdFromTarget(state, renameCommand.target);
-      const renamed = target.sessionId
+      const renameSessionId = target.sessionId;
+      const renamed = renameSessionId
         ? await (renameSession
-            ? renameSession(target.sessionId, renameCommand.nextSessionId)
+            ? renameSession(renameSessionId, renameCommand.nextSessionId)
             : renameChatSessionState({
                 cwd: state.cwd,
-                fromSessionId: target.sessionId,
+                fromSessionId: renameSessionId,
                 toSessionId: renameCommand.nextSessionId,
               }))
         : undefined;
@@ -1262,10 +1279,10 @@ export const handleChatInput = async ({
             ),
             exit: false,
           }
-        : renamed
+        : renamed && renameSessionId
           ? {
               state:
-                target.sessionId === state.sessionId
+                renameSessionId === state.sessionId
                   ? appendAssistant(
                       withoutPanels(
                         normalizeLoadedSessionState({
@@ -1274,11 +1291,15 @@ export const handleChatInput = async ({
                           commandOptions,
                         })
                       ),
-                      `Renamed session ${target.sessionId} to ${renameCommand.nextSessionId}.`
+                      `Renamed session ${renameSessionId} to ${renameCommand.nextSessionId}.`
                     )
                   : appendAssistant(
-                      withoutPanels(state),
-                      `Renamed session ${target.sessionId} to ${renameCommand.nextSessionId}.`
+                      withRenamedSessionChoice(
+                        state,
+                        renameSessionId,
+                        renameCommand.nextSessionId
+                      ),
+                      `Renamed session ${renameSessionId} to ${renameCommand.nextSessionId}.`
                     ),
               exit: false,
             }
