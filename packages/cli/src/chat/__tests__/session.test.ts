@@ -1055,6 +1055,47 @@ describe("chat session", () => {
     expect(opened.state.messages.at(-1)?.content).toContain("Run details not found: exec-missing");
   });
 
+  it("clears stale run details when requested details are missing", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const findRun = vi.fn(async () => undefined);
+    const state = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      workflowChoices: [locator],
+      showHelpPanel: true,
+    };
+
+    const opened = await handleChatInput({
+      input: "/details exec-missing",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      findRun,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(findRun).toHaveBeenCalledWith("exec-missing");
+    expect(opened.state.inspectedRunSummary).toBeUndefined();
+    expect(opened.state.runChoices?.[0]?.runSummary.executionId).toBe("exec-chat-1");
+    expect(opened.state.sessionChoices).toBeUndefined();
+    expect(opened.state.workflowChoices).toBeUndefined();
+    expect(opened.state.showHelpPanel).toBeUndefined();
+    expect(opened.state.messages.at(-1)?.content).toContain("Run details not found: exec-missing");
+  });
+
   it("reports missing numbered run details when no run choices exist", async () => {
     const state = createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true });
 

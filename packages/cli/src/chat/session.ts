@@ -1219,7 +1219,7 @@ export const handleChatInput = async ({
       : (state.runChoices ?? []);
     return {
       state: appendAssistant(
-        summary ? withInspectedRunSummary(state, summary, runChoices) : state,
+        summary ? withInspectedRunSummary(state, summary, runChoices) : clearPanels(state),
         summary
           ? openedRunDetailsMessage(summary, choice, persistedDetail)
           : `Run details not found: ${detailsExecutionId}`
