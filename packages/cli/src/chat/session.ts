@@ -1249,7 +1249,7 @@ export const handleChatInput = async ({
         })
       : {
           state: appendAssistant(
-            state,
+            withoutPanels(state),
             "Workflow choice not found. Run /workflows first, then use /run #1 <task>."
           ),
           exit: false,
@@ -1270,7 +1270,10 @@ export const handleChatInput = async ({
 
   if (!state.workflowLocator) {
     return {
-      state: appendAssistant(state, "Select a workflow first with /workflow <name-or-path>."),
+      state: appendAssistant(
+        withoutPanels(state),
+        "Select a workflow first with /workflow <name-or-path>."
+      ),
       exit: false,
     };
   }

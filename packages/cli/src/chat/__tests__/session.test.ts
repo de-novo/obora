@@ -2737,11 +2737,30 @@ describe("chat session", () => {
 
   it("reports missing numbered workflow choices clearly", async () => {
     vi.clearAllMocks();
-    const state = createInitialChatState({
-      sessionId: "session-a",
-      cwd: "/repo",
-      dryRun: true,
-    });
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      workflowChoices: [],
+      showHelpPanel: true,
+    };
 
     const result = await handleChatInput({
       input: "/run #1 inspect the branch",
@@ -2752,6 +2771,11 @@ describe("chat session", () => {
     });
 
     expect(runWorkflow).not.toHaveBeenCalled();
+    expect(result.state.inspectedRunSummary).toBeUndefined();
+    expect(result.state.runChoices).toBeUndefined();
+    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.showHelpPanel).toBeUndefined();
     expect(result.state.messages.at(-1)?.content).toContain("Workflow choice not found");
   });
 
@@ -3030,7 +3054,26 @@ describe("chat session", () => {
   });
 
   it("requires workflow selection before running a task", async () => {
-    const state = createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true });
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const state = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      workflowChoices: [locator],
+      showHelpPanel: true,
+    };
 
     const result = await handleChatInput({
       input: "do work",
@@ -3040,6 +3083,11 @@ describe("chat session", () => {
       commandOptions: { dryRun: true },
     });
 
+    expect(result.state.inspectedRunSummary).toBeUndefined();
+    expect(result.state.runChoices).toBeUndefined();
+    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.showHelpPanel).toBeUndefined();
     expect(result.state.messages.at(-1)?.content).toContain("Select a workflow first");
   });
 
