@@ -743,13 +743,15 @@ const withRetryContextFromRunDetail = (
   const runTask = choice?.runTask ?? persistedDetail?.runTask;
   const runWorkflowLocator = choice?.runWorkflowLocator ?? persistedDetail?.runWorkflowLocator;
   const runOptions = choice?.runOptions ?? persistedDetail?.runOptions;
-  return runTask && runWorkflowLocator
+  return runTask
     ? {
         ...state,
         lastRunTask: runTask,
         lastRunWorkflowLocator: runWorkflowLocator,
         lastRunOptions: runOptions,
-        lastRunCommand: `obora run ${runWorkflowLocator.displayPath}`,
+        lastRunCommand: runWorkflowLocator
+          ? `obora run ${runWorkflowLocator.displayPath}`
+          : undefined,
       }
     : state;
 };

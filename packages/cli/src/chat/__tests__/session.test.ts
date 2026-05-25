@@ -621,6 +621,11 @@ describe("chat session", () => {
         projectRoot: "/repo",
         dryRun: true,
       }),
+      lastRunOptions: {
+        provider: "openrouter",
+        model: "openrouter/owl-alpha",
+        timeout: 2500,
+      },
       runChoices: [
         {
           runSummary,
@@ -643,6 +648,7 @@ describe("chat session", () => {
     expect(failingResolveWorkflow).toHaveBeenCalledWith("release-readiness", "/repo");
     expect(runWorkflow).not.toHaveBeenCalled();
     expect(result.state.status).toBe("failed");
+    expect(result.state.lastRunOptions).toBeUndefined();
     expect(result.state.messages.at(-1)?.content).toContain(
       "Workflow resolve failed: workflow missing"
     );
