@@ -1700,6 +1700,58 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("release-readiness");
   });
 
+  it("keeps chat open when session listing fails", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const listSessions = vi.fn(async () => {
+      throw new Error("Session store unavailable");
+    });
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      workflowChoices: [locator],
+      showHelpPanel: true,
+    };
+
+    const result = await handleChatInput({
+      input: "/sessions release",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      listSessions,
+    });
+
+    expect(listSessions).toHaveBeenCalledWith("release", undefined);
+    expect(result.exit).toBe(false);
+    expect(result.state.status).toBe("failed");
+    expect(result.state.lastError).toBe("Session store unavailable");
+    expect(result.state.inspectedRunSummary).toBeUndefined();
+    expect(result.state.runChoices).toBeUndefined();
+    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.showHelpPanel).toBeUndefined();
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Session list failed: Session store unavailable"
+    );
+  });
+
   it("stores listed sessions as numbered choices and switches by number", async () => {
     const loaded = createInitialChatState({
       sessionId: "release-session",
@@ -2586,6 +2638,59 @@ describe("chat session", () => {
 
     expect(listWorkflowLocators).toHaveBeenCalledWith("project", "/repo/packages/cli");
     expect(result.state.workflowChoices).toEqual([locator]);
+  });
+
+  it("keeps chat open when workflow listing fails", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const listWorkflowLocators = vi.fn(async () => {
+      throw "Workflow discovery failed";
+    });
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        projectRoot: "/repo/packages/cli",
+        dryRun: true,
+      }),
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      workflowChoices: [locator],
+      showHelpPanel: true,
+    };
+
+    const result = await handleChatInput({
+      input: "/workflows project",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      listWorkflowLocators,
+    });
+
+    expect(listWorkflowLocators).toHaveBeenCalledWith("project", "/repo/packages/cli");
+    expect(result.exit).toBe(false);
+    expect(result.state.status).toBe("failed");
+    expect(result.state.lastError).toBe("Workflow discovery failed");
+    expect(result.state.inspectedRunSummary).toBeUndefined();
+    expect(result.state.runChoices).toBeUndefined();
+    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.showHelpPanel).toBeUndefined();
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Workflow list failed: Workflow discovery failed"
+    );
   });
 
   it("selects a workflow by number from the latest workflow list", async () => {

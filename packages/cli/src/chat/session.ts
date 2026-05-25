@@ -832,6 +832,21 @@ const workflowResolveFailureResult = (
   };
 };
 
+const listFailureResult = (
+  state: ChatSessionState,
+  label: string,
+  error: unknown
+): ChatTurnResult => {
+  const message = errorMessage(error);
+  return {
+    state: appendAssistant(
+      setChatStatus(withoutPanels(state), "failed", message),
+      `${label} failed: ${message}`
+    ),
+    exit: false,
+  };
+};
+
 const resolveWorkflowForSession =
   (options: ChatSessionRuntimeOptions, scope: WorkflowResolveScope | undefined) =>
   async (target: string, projectRoot?: string): Promise<WorkflowLocator> =>
@@ -978,20 +993,21 @@ export const handleChatInput = async ({
 
   if (trimmed === "/sessions" || trimmed.startsWith("/sessions ")) {
     const filter = sessionListFilterFromCommand(trimmed, state);
-    const summaries = await (listSessions
+    return (listSessions
       ? listSessions(filter.tag, filter.projectRoot)
       : listChatSessionSummaries({
           cwd: state.cwd,
           ...(filter.tag ? { tag: filter.tag } : {}),
           ...(filter.projectRoot ? { projectRoot: filter.projectRoot } : {}),
-        }));
-    return {
-      state: appendAssistant(
-        withSessionChoices(state, summaries.slice(0, 8)),
-        formatSessionListMessage(summaries, filter)
-      ),
-      exit: false,
-    };
+        }))
+      .then((summaries): ChatTurnResult => ({
+        state: appendAssistant(
+          withSessionChoices(state, summaries.slice(0, 8)),
+          formatSessionListMessage(summaries, filter)
+        ),
+        exit: false,
+      }))
+      .catch((error: unknown): ChatTurnResult => listFailureResult(state, "Session list", error));
   }
 
   if (trimmed === "/session") {
@@ -1141,18 +1157,22 @@ export const handleChatInput = async ({
 
   if (trimmed === "/workflows" || trimmed.startsWith("/workflows ")) {
     const scope = parseChatWorkflowScope(workflowsScopeFromCommand(trimmed) ?? commandOptions.scope);
-    const locators = await (listWorkflowLocators
+    return (listWorkflowLocators
       ? listWorkflowLocators(scope, state.projectRoot)
       : listChatWorkflowLocators({
           cwd: state.cwd,
           scope,
           projectRoot: state.projectRoot ?? commandOptions.project,
           globalWorkflowDir: commandOptions.globalWorkflowsDir,
-        }));
-    return {
-      state: appendAssistant(withWorkflowChoices(state, locators.slice(0, 8)), formatWorkflowListMessage(locators, scope)),
-      exit: false,
-    };
+        }))
+      .then((locators): ChatTurnResult => ({
+        state: appendAssistant(
+          withWorkflowChoices(state, locators.slice(0, 8)),
+          formatWorkflowListMessage(locators, scope)
+        ),
+        exit: false,
+      }))
+      .catch((error: unknown): ChatTurnResult => listFailureResult(state, "Workflow list", error));
   }
 
   if (trimmed === "/tags") {
