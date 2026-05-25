@@ -1,4 +1,5 @@
 import type { ChatSessionState } from "./types.js";
+import { runStatusFilterUsage } from "./run-status-filter.js";
 
 interface ChatCommandHelpEntry {
   readonly command: string;
@@ -124,7 +125,7 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
     group: "run",
   },
   {
-    command: "/runs failed, /runs --project [path], /runs --tag <tag>, or /runs --status <status>",
+    command: `/runs failed, /runs --project [path], /runs --tag <tag>, or /runs --status <${runStatusFilterUsage()}>`,
     description: "filters persisted runs",
     group: "run",
   },
@@ -193,7 +194,7 @@ export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<st
   if (state.runChoices && state.runChoices.length > 0) {
     return [
       "/details  1  /details <runId>",
-      "/runs --project  /runs --tag <tag>  /runs --status failed",
+      "/runs --project  /runs --tag <tag>  /runs failed",
     ];
   }
   if (state.sessionChoices && state.sessionChoices.length > 0) {

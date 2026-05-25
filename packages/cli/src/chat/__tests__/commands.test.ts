@@ -56,6 +56,7 @@ describe("chat command metadata", () => {
       "  /details [executionId-or-number] - shows latest or selected step results"
     );
     expect(chatHelp).toContain("  /runs failed, /runs --project [path]");
+    expect(chatHelp).toContain("/runs --status <queued|running|waiting|suspended|completed|failed|aborted>");
     expect(chatHelp).toContain("  /sessions here or /sessions [tag]");
     expect(chatHelp).toContain("  /clear or /details clear - closes the current panel");
     expect(chatCommandHelpSections.map((section) => section.title)).toEqual([
@@ -100,6 +101,15 @@ describe("chat command metadata", () => {
         runChoices: [{ runSummary, sessionId: "session-a" }],
       })
     ).toEqual(["/clear  1  /details <runId>", "/runs  /session  /project  /help"]);
+    expect(
+      chatPromptCommandRows({
+        ...state,
+        runChoices: [{ runSummary, sessionId: "session-a" }],
+      })
+    ).toEqual([
+      "/details  1  /details <runId>",
+      "/runs --project  /runs --tag <tag>  /runs failed",
+    ]);
     expect(
       chatPromptCommandRows({
         ...state,
