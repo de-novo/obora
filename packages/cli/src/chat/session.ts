@@ -407,6 +407,11 @@ const withWorkflowChoicesOnly = (state: ChatSessionState): ChatSessionState => (
     : {}),
 });
 
+const withRunChoicesOnly = (state: ChatSessionState): ChatSessionState => ({
+  ...withoutPanels(state),
+  ...(state.runChoices && state.runChoices.length > 0 ? { runChoices: state.runChoices } : {}),
+});
+
 const withoutDeletedSessionChoice = (
   state: ChatSessionState,
   deletedSessionId: string
@@ -1517,6 +1522,15 @@ export const handleChatInput = async ({
   if (detailsExecutionId) {
     const choiceIndex = runChoiceIndexFromTarget(detailsExecutionId);
     const choice = choiceIndex === undefined ? undefined : runChoiceEntryAt(state, choiceIndex);
+    if (choiceIndex !== undefined && !choice) {
+      return {
+        state: appendAssistant(
+          withRunChoicesOnly(state),
+          "Run choice not found. Run /runs first, then use /details 1."
+        ),
+        exit: false,
+      };
+    }
     const choiceSummary = choice ? runChoiceSummary(choice) : undefined;
     const stateSummary = choiceSummary ?? findRunSummaryInState(state, detailsExecutionId);
     const persistedDetail = stateSummary

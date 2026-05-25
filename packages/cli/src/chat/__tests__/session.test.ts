@@ -1593,6 +1593,31 @@ describe("chat session", () => {
     expect(opened.state.messages.at(-1)?.content).toContain("Run details not found: exec-missing");
   });
 
+  it("keeps listed run choices when a numbered run detail choice is missing", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const findRun = vi.fn(async () => undefined);
+    const state = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+    };
+
+    const opened = await handleChatInput({
+      input: "/details 2",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      findRun,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(findRun).not.toHaveBeenCalled();
+    expect(opened.state.inspectedRunSummary).toBeUndefined();
+    expect(opened.state.runChoices?.map((choice) => choice.runSummary.executionId)).toEqual([
+      "exec-chat-1",
+    ]);
+    expect(opened.state.messages.at(-1)?.content).toContain("Run choice not found.");
+  });
+
   it("reports missing numbered run details when no run choices exist", async () => {
     const state = createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true });
 
@@ -1605,7 +1630,7 @@ describe("chat session", () => {
     });
 
     expect(opened.state.inspectedRunSummary).toBeUndefined();
-    expect(opened.state.messages.at(-1)?.content).toContain("Run details not found: 1");
+    expect(opened.state.messages.at(-1)?.content).toContain("Run choice not found.");
   });
 
   it("lists persisted runs for a selected session choice from chat", async () => {
