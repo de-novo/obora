@@ -179,6 +179,7 @@ describe("chat session store", () => {
       ...createInitialChatState({
         sessionId: "session-with-run",
         cwd,
+        projectRoot: join(cwd, "project-a"),
         dryRun: false,
         workflowTarget: "release-readiness",
       }),
@@ -197,6 +198,7 @@ describe("chat session store", () => {
 
     await expect(findChatRunDetail({ cwd, executionId: "exec-123" })).resolves.toMatchObject({
       sessionId: "session-with-run",
+      projectRoot: join(cwd, "project-a"),
       messageId: "assistant:run",
       workflowTarget: "release-readiness",
       runSummary: {
@@ -225,6 +227,7 @@ describe("chat session store", () => {
       ...createInitialChatState({
         sessionId: "session-with-runs",
         cwd,
+        projectRoot: cwd,
         dryRun: false,
         workflowTarget: "release-readiness",
       }),
@@ -257,11 +260,13 @@ describe("chat session store", () => {
     await expect(listChatRunDetails({ cwd })).resolves.toEqual([
       expect.objectContaining({
         sessionId: "session-with-runs",
+        projectRoot: cwd,
         messageId: "state:lastRunSummary",
         runSummary: expect.objectContaining({ executionId: "exec-last" }),
       }),
       expect.objectContaining({
         sessionId: "session-with-runs",
+        projectRoot: cwd,
         messageId: "assistant:run",
         runSummary: expect.objectContaining({ executionId: "exec-message" }),
       }),
@@ -314,6 +319,7 @@ describe("chat session store", () => {
       ...createInitialChatState({
         sessionId: "session-with-switch",
         cwd,
+        projectRoot: cwd,
         dryRun: false,
         workflowTarget: "beta.yaml",
       }),
@@ -349,6 +355,7 @@ describe("chat session store", () => {
     await expect(listChatRunDetails({ cwd, sessionId: "session-with-switch" })).resolves.toEqual([
       expect.objectContaining({
         messageId: "assistant:beta",
+        projectRoot: cwd,
         workflowTarget: "beta.yaml",
         runTask: "run beta",
         runWorkflowLocator: expect.objectContaining({ name: "beta-workflow" }),
@@ -356,6 +363,7 @@ describe("chat session store", () => {
       }),
       expect.objectContaining({
         messageId: "assistant:alpha",
+        projectRoot: cwd,
         workflowTarget: "alpha.yaml",
         runTask: "run alpha",
         runWorkflowLocator: expect.objectContaining({ name: "alpha-workflow" }),
@@ -363,6 +371,7 @@ describe("chat session store", () => {
       }),
     ]);
     await expect(findChatRunDetail({ cwd, executionId: "exec-alpha" })).resolves.toMatchObject({
+      projectRoot: cwd,
       workflowTarget: "alpha.yaml",
       runTask: "run alpha",
       runWorkflowLocator: { name: "alpha-workflow" },
@@ -375,6 +384,7 @@ describe("chat session store", () => {
       ...createInitialChatState({
         sessionId: "session-with-task",
         cwd,
+        projectRoot: join(cwd, "project-a"),
         dryRun: false,
         workflowTarget: "release-readiness",
       }),
@@ -386,6 +396,7 @@ describe("chat session store", () => {
 
     await expect(findChatRunDetail({ cwd, executionId: "exec-123" })).resolves.toMatchObject({
       messageId: "state:lastRunSummary",
+      projectRoot: join(cwd, "project-a"),
       runTask: "prepare release",
       runSummary: { executionId: "exec-123" },
     });

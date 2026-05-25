@@ -19,6 +19,7 @@ export interface ChatMessage {
 export interface ChatRunChoice {
   readonly runSummary: WorkflowRunSummary;
   readonly sessionId?: string;
+  readonly projectRoot?: string;
   readonly messageId?: string;
   readonly source?: string;
   readonly runTask?: string;

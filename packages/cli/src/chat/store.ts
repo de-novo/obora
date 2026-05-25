@@ -27,6 +27,7 @@ export interface ChatSessionSummaryGroup {
 
 export interface ChatRunDetail {
   readonly sessionId: string;
+  readonly projectRoot?: string;
   readonly messageId: string;
   readonly messageCreatedAt: string;
   readonly workflowTarget?: string;
@@ -342,6 +343,7 @@ const syntheticRunDetail = (
   source: string
 ): ChatRunDetail => ({
   sessionId: state.sessionId,
+  ...(state.projectRoot ? { projectRoot: state.projectRoot } : {}),
   messageId: source,
   messageCreatedAt: summary.startedAt,
   ...(state.workflowTarget ? { workflowTarget: state.workflowTarget } : {}),
@@ -380,6 +382,7 @@ const chatRunDetailFromMessage = (
   message.runSummary
     ? {
         sessionId: state.sessionId,
+        ...(state.projectRoot ? { projectRoot: state.projectRoot } : {}),
         messageId: message.id,
         messageCreatedAt: message.createdAt,
         ...(messageWorkflowTarget(state, message)

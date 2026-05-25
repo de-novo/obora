@@ -335,6 +335,7 @@ const findRunChoiceInState = (
         ? [
             {
               runSummary: message.runSummary,
+              ...(state.projectRoot ? { projectRoot: state.projectRoot } : {}),
               messageId: message.id,
               source: "message",
               ...(message.runTask ? { runTask: message.runTask } : {}),
@@ -349,6 +350,7 @@ const findRunChoiceInState = (
   (state.lastRunSummary?.executionId === executionId
     ? {
         runSummary: state.lastRunSummary,
+        ...(state.projectRoot ? { projectRoot: state.projectRoot } : {}),
         source: "lastRunSummary",
         ...(state.lastRunTask ? { runTask: state.lastRunTask } : {}),
         ...(state.lastRunWorkflowLocator
@@ -370,11 +372,15 @@ const runChoiceContextForSummary = (
       }
     : {};
 
-const runChoiceFromMessage = (message: ChatMessage): ReadonlyArray<ChatRunChoice> =>
+const runChoiceFromMessage = (
+  state: ChatSessionState,
+  message: ChatMessage
+): ReadonlyArray<ChatRunChoice> =>
   message.runSummary
     ? [
         {
           runSummary: message.runSummary,
+          ...(state.projectRoot ? { projectRoot: state.projectRoot } : {}),
           messageId: message.id,
           source: "message",
           ...(message.runTask ? { runTask: message.runTask } : {}),
@@ -387,11 +393,12 @@ const runChoiceFromMessage = (message: ChatMessage): ReadonlyArray<ChatRunChoice
 
 const runChoicesFromState = (state: ChatSessionState): ReadonlyArray<ChatRunChoice> =>
   uniqueRunChoices([
-    ...state.messages.flatMap(runChoiceFromMessage),
+    ...state.messages.flatMap((message) => runChoiceFromMessage(state, message)),
     ...(state.lastRunSummary
       ? [
           {
             runSummary: state.lastRunSummary,
+            ...(state.projectRoot ? { projectRoot: state.projectRoot } : {}),
             source: "lastRunSummary",
             ...runChoiceContextForSummary(state, state.lastRunSummary),
           },
@@ -401,6 +408,7 @@ const runChoicesFromState = (state: ChatSessionState): ReadonlyArray<ChatRunChoi
       ? [
           {
             runSummary: state.inspectedRunSummary,
+            ...(state.projectRoot ? { projectRoot: state.projectRoot } : {}),
             source: "inspectedRunSummary",
             ...runChoiceContextForSummary(state, state.inspectedRunSummary),
           },
@@ -756,7 +764,10 @@ const retryRunFromContext = ({
     });
   return retryContext.runWorkflowLocator
     ? runResolvedWorkflow(retryContext.runWorkflowLocator)
-    : resolveWorkflow(retryContext.runSummary.workflowName, state.projectRoot)
+    : resolveWorkflow(
+        retryContext.runSummary.workflowName,
+        retryContext.projectRoot ?? state.projectRoot
+      )
         .then(runResolvedWorkflow)
         .catch((error: unknown): ChatTurnResult =>
           workflowResolveFailureResult(retryState, error)

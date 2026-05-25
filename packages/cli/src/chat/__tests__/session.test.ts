@@ -458,6 +458,44 @@ describe("chat session", () => {
     expect(result.state.lastRunWorkflowLocator).toBe(locator);
   });
 
+  it("retries a persisted run without locator from its source project", async () => {
+    vi.clearAllMocks();
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const findRun = vi.fn(async () => ({
+      sessionId: "source-session",
+      projectRoot: "/repo/source-project",
+      messageId: "assistant:run",
+      messageCreatedAt: "2026-05-21T00:00:02.000Z",
+      runTask: "perform the release check",
+      runSummary,
+    }));
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      projectRoot: "/repo/current-project",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/retry exec-chat-1",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      findRun,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(resolveWorkflow).toHaveBeenCalledWith("release-readiness", "/repo/source-project");
+    expect(runWorkflow).toHaveBeenCalledWith(
+      locator.path,
+      expect.objectContaining({
+        input: expect.stringContaining("perform the release check"),
+      })
+    );
+    expect(result.state.projectRoot).toBe("/repo/current-project");
+    expect(result.state.lastRunTask).toBe("perform the release check");
+  });
+
   it("retries a numbered run choice without locator by resolving the workflow name", async () => {
     vi.clearAllMocks();
     const runSummary = buildWorkflowRunSummary(executionResult);
@@ -472,6 +510,7 @@ describe("chat session", () => {
         {
           runSummary,
           sessionId: "session-a",
+          projectRoot: "/repo/source-project",
           messageId: "assistant:run",
           source: "persisted",
           runTask: "perform the release check",
@@ -487,7 +526,7 @@ describe("chat session", () => {
       commandOptions: { dryRun: true },
     });
 
-    expect(resolveWorkflow).toHaveBeenCalledWith("release-readiness", "/repo");
+    expect(resolveWorkflow).toHaveBeenCalledWith("release-readiness", "/repo/source-project");
     expect(runWorkflow).toHaveBeenCalledWith(
       locator.path,
       expect.objectContaining({

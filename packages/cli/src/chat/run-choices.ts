@@ -6,6 +6,7 @@ export type ChatRunChoiceInput = ChatRunChoice | WorkflowRunSummary;
 
 export interface ChatRunChoiceDetailInput {
   readonly sessionId: string;
+  readonly projectRoot?: string;
   readonly messageId: string;
   readonly runSummary: WorkflowRunSummary;
   readonly runTask?: ChatRunChoice["runTask"];
@@ -39,6 +40,7 @@ export const chatRunChoicesFromSummaries = (
 export const chatRunChoiceFromDetail = (detail: ChatRunChoiceDetailInput): ChatRunChoice => ({
   runSummary: detail.runSummary,
   sessionId: detail.sessionId,
+  ...(detail.projectRoot ? { projectRoot: detail.projectRoot } : {}),
   messageId: detail.messageId,
   source: "persisted",
   ...(detail.runTask ? { runTask: detail.runTask } : {}),
