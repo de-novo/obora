@@ -246,7 +246,7 @@ const runDetailAttentionLines = (summary: WorkflowRunSummary): ReadonlyArray<str
       `${muted("hint")} ${step.outputPreview}`,
     ]),
     ...(attentionSteps(summary).length > 0
-      ? [`${muted("next")} /run <task> after fixing inputs   ${muted("history")} /runs`]
+      ? [`${muted("next")} /retry after fixing inputs   ${muted("run")} /run <task>   ${muted("history")} /runs`]
       : []),
   ];
 

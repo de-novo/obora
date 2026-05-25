@@ -275,7 +275,40 @@ describe("chat session", () => {
         input: expect.stringContaining("perform the release check"),
       })
     );
+    expect(result.state.lastRunTask).toBe("perform the release check");
     expect(result.state.messages.at(-1)?.content).toContain("Workflow run completed");
+  });
+
+  it("retries the last chat task with the current workflow", async () => {
+    vi.clearAllMocks();
+    const selected = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      workflowLocator: locator,
+      lastRunTask: "perform the release check",
+      status: "failed" as const,
+    };
+
+    const result = await handleChatInput({
+      input: "/retry",
+      state: selected,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflow).toHaveBeenCalledWith(
+      locator.path,
+      expect.objectContaining({
+        input: expect.stringContaining("perform the release check"),
+      })
+    );
+    expect(result.state.lastRunTask).toBe("perform the release check");
+    expect(result.state.messages.at(-2)?.content).toBe("perform the release check");
+    expect(result.state.messages.at(-1)?.content).toContain("Dry-run completed");
   });
 
   it("runs a single chat task with an explicit workflow override", async () => {

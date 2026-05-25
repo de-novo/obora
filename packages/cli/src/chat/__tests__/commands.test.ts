@@ -83,7 +83,10 @@ describe("chat command metadata", () => {
         },
         lastRunSummary: runSummary,
       })
-    ).toEqual(["/details  /run <task>  /runs", "/workflows  /session  /project  /help"]);
+    ).toEqual([
+      "/details  /retry  /run <task>  /runs",
+      "/workflows  /session  /project  /help",
+    ]);
     expect(
       chatPromptCommandRows({
         ...state,

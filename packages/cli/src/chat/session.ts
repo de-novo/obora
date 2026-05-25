@@ -795,6 +795,7 @@ const runChatTask = ({
           {
             ...setChatStatus(runningState, "ready"),
             lastRunCommand,
+            lastRunTask: message,
             ...(runSummary ? { lastRunSummary: runSummary } : {}),
           },
           formatRunSummaryMessage(runSummary, commandOptions.dryRun),
@@ -804,14 +805,15 @@ const runChatTask = ({
       };
     })
     .catch((error: unknown): ChatTurnResult => {
-      const message = errorMessage(error);
+      const failureMessage = errorMessage(error);
       return {
         state: appendAssistant(
           {
-            ...setChatStatus(runningState, "failed", message),
+            ...setChatStatus(runningState, "failed", failureMessage),
             lastRunCommand,
+            lastRunTask: message,
           },
-          `Workflow run failed: ${message}`
+          `Workflow run failed: ${failureMessage}`
         ),
         exit: false,
       };
@@ -937,6 +939,24 @@ export const handleChatInput = async ({
       ),
       exit: false,
     };
+  }
+
+  if (trimmed === "/retry") {
+    return state.workflowLocator && state.lastRunTask
+      ? runChatTask({
+          state,
+          workflowLocator: state.workflowLocator,
+          message: state.lastRunTask,
+          runWorkflow,
+          commandOptions,
+        })
+      : {
+          state: appendAssistant(
+            withoutPanels(state),
+            "Nothing to retry yet. Run a workflow task first with /run <task>."
+          ),
+          exit: false,
+        };
   }
 
   if (trimmed === "/runs") {

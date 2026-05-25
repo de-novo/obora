@@ -84,6 +84,11 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
     group: "workflow",
   },
   {
+    command: "/retry",
+    description: "reruns the last workflow task",
+    group: "workflow",
+  },
+  {
     command: "/run #1 <task>",
     description: "runs one task with a listed workflow",
     group: "workflow",
@@ -186,7 +191,7 @@ export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<st
   }
   if (state.workflowLocator) {
     return state.lastRunSummary
-      ? ["/details  /run <task>  /runs", "/workflows  /session  /project  /help"]
+      ? ["/details  /retry  /run <task>  /runs", "/workflows  /session  /project  /help"]
       : ["/run <task>  /runs  /workflows", "/session  /project  /tags  /help"];
   }
   return state.workflowChoices && state.workflowChoices.length > 0

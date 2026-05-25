@@ -129,7 +129,7 @@ describe("renderChatView", () => {
     expect(plain).not.toContain("depends collect");
     expect(plain).toContain("steps 4");
     expect(plain).toContain("› release-readiness ready · type task or /run");
-    expect(plain).toContain("/details  /run <task>  /runs");
+    expect(plain).toContain("/details  /retry  /run <task>  /runs");
     expect(plain).toContain("/workflows  /session  /project  /help");
     expect(output).not.toContain("+---");
   });
@@ -571,7 +571,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("attention #1 collect missing");
     expect(plain).toContain("cause Provider returned error");
     expect(plain).toContain("hint No output recorded.");
-    expect(plain).toContain("next /run <task> after fixing inputs");
+    expect(plain).toContain("next /retry after fixing inputs");
     expect(plain).toContain("#1 collect missing");
     expect(plain).toContain("issues Provider returned error");
   });
