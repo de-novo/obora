@@ -323,6 +323,34 @@ describe("chat command", () => {
     ]);
   });
 
+  it("filters persisted chat runs by project, tag, and status", async () => {
+    vi.mocked(listChatRunDetails).mockResolvedValue([]);
+
+    await createChatCommand().parseAsync(
+      [
+        "--list-runs",
+        "--filter-project",
+        "current",
+        "--filter-tag",
+        "release",
+        "--filter-run-status",
+        "failed",
+        "--json",
+      ],
+      { from: "user" }
+    );
+
+    expect(runChatSession).not.toHaveBeenCalled();
+    expect(listChatRunDetails).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: process.cwd(),
+        projectRoot: process.cwd(),
+        tag: "release",
+        status: "failed",
+      })
+    );
+  });
+
   it("prints persisted chat runs as JSON", async () => {
     vi.mocked(listChatRunDetails).mockResolvedValue([
       {

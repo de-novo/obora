@@ -71,6 +71,7 @@ export interface ChatCommandOptions {
   readonly groupSessions?: string;
   readonly filterTag?: string;
   readonly filterProject?: string;
+  readonly filterRunStatus?: string;
   readonly tags?: string;
   readonly dryRun?: boolean;
   readonly scope?: string;

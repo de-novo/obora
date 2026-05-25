@@ -620,6 +620,7 @@ obora chat --workflow <workflow> --session <id>
 obora chat --list-sessions [--json]
 obora chat --list-sessions --group-sessions project|tag|day [--filter-tag <tag>] [--filter-project <path|current>] [--json]
 obora chat --show-session --session <id>
+obora chat --list-runs [--session <id>] [--filter-run-status <status>] [--filter-tag <tag>] [--filter-project <path|current>] [--json]
 obora chat --show-run <executionId> [--session <id>]
 ```
 
@@ -635,6 +636,8 @@ obora chat --show-run <executionId> [--session <id>]
 - `--filter-tag <tag>` only list sessions with the given tag
 - `--filter-project <path|current>` only list sessions for a project root
 - `--show-session` print the persisted chat session selected by `--session`
+- `--list-runs` list persisted workflow runs without starting the TUI; with `--session`, search only that session
+- `--filter-run-status <status>` only list persisted workflow runs with the given status
 - `--show-run <executionId>` print a persisted workflow run summary; with `--session`, search only that session
 - `--once <message>` run one chat message and exit, useful for automation and smoke tests
 - `--dry-run` validate the selected workflow without live execution

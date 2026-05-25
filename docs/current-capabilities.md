@@ -39,6 +39,7 @@ README에서 전체 진입 순서를 먼저 보고 싶으면 `README.md`, 지원
 - `obora status`
 - `obora validate`
 - `obora test`
+- `obora chat`
 - `obora plugin`
 - `obora audit`
 - `obora policy`
@@ -97,6 +98,8 @@ obora judge
 - `judge`로 judge one-file onboarding 경로를 가장 짧게 실행
 - `run`으로 일반 workflow 실행
 - `test`로 workflow test 실행
+- `chat`으로 선택한 workflow에 operator message를 주입하는 TUI 세션 실행
+- chat session 안에서 workflow를 전환하고, project/tag/time 기준으로 세션을 다시 찾고, 저장된 workflow run 상세를 조회
 - `policy`로 policy validate/query 같은 정책 surface 실행
 
 ### 2.3 운영 / 관찰 / 사후 분석

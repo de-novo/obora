@@ -116,6 +116,8 @@ obora --json run workflow.yaml --dry-run --dump-expanded-workflow --show-stop-se
 obora run workflow.yaml
 obora judge
 obora test workflow.yaml
+obora chat release-readiness --session release-qa --tags release,qa
+obora chat release-readiness --session release-qa --once "prepare release notes"
 ```
 
 언제 쓰나:
@@ -123,6 +125,7 @@ obora test workflow.yaml
 - 일반 workflow 실행
 - judge-mode 짧은 평가 실행
 - workflow test surface 실행
+- 같은 세션에서 여러 operator request를 채팅으로 실행하고 workflow 결과를 누적할 때
 
 ---
 
@@ -152,6 +155,8 @@ obora runs list --status failed --repair-loop critical --json
 obora --json runs list --workflow judge
 obora inspect <runId>
 obora --json inspect <runId>
+obora chat --list-runs --filter-tag release --filter-run-status completed --json
+obora chat --show-run <executionId> --session release-qa
 ```
 
 보는 것:
@@ -161,6 +166,7 @@ obora --json inspect <runId>
 - repair-loop / triageCause / linked DLQ 기준으로 정렬·필터된 operator view
 - `inspect`를 top-level alias로 바로 써서 특정 실행 상세 조회
 - local/root `--json`으로 같은 persisted-run inspection contract를 자동화에 연결
+- chat session에 저장된 workflow run 목록과 step별 tools/artifacts/decisions/issues 상세
 
 ### 3.3 중단 실행 이어서 처리
 

@@ -149,6 +149,8 @@ Use this authoring rule for reusable workflows:
 - **agents inspect the repository at execution time and choose files, directories, and change scope from local context**
 - **do not hard-code task-specific directories, file lists, or framework choices in reusable workflow prompts unless the workflow is intentionally specialized**
 
+For iterative work, use `obora chat` with a stable `--session`; saved chat runs can be listed with `obora chat --list-runs` and inspected with `obora chat --show-run <executionId>` to review step outputs, tools, artifacts, decisions, and issues.
+
 ### Runnable example
 
 A ready-to-run contract-first example is here:
