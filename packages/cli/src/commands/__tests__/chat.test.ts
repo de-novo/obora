@@ -370,6 +370,34 @@ describe("chat command", () => {
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"executionId": "exec-json"'));
   });
 
+  it("shows retryable old run details without a workflow locator", async () => {
+    vi.mocked(findChatRunDetail).mockResolvedValue({
+      sessionId: "session-a",
+      projectRoot: "/repo/source-project",
+      messageId: "assistant:old-run",
+      messageCreatedAt: "2026-05-24T00:00:01.000Z",
+      runTask: "rerun old task",
+      runSummary: {
+        executionId: "exec-old",
+        workflowName: "legacy-flow",
+        status: "completed",
+        startedAt: "2026-05-24T00:00:00.000Z",
+        completedStepCount: 1,
+        totalStepCount: 1,
+        message: "Workflow completed: 1/1 steps completed.",
+        steps: [],
+      },
+    });
+
+    await createChatCommand().parseAsync(["--show-run", "exec-old"], {
+      from: "user",
+    });
+
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Task: rerun old task"));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Retry: legacy-flow"));
+    expect(console.log).not.toHaveBeenCalledWith(expect.stringContaining("Retry: not available"));
+  });
+
   it("lists persisted chat runs without starting the TUI", async () => {
     const tableSpy = vi.spyOn(console, "table").mockImplementation(() => undefined);
     vi.mocked(listChatRunDetails).mockResolvedValue([

@@ -33,6 +33,9 @@ const formatStep = (step: WorkflowRunStepSummary, index: number): ReadonlyArray<
     valueLine("issues", step.issues, "; "),
   ].filter((line): line is string => Boolean(line));
 
+const formatRetryWorkflowName = (detail: ChatRunDetail): string =>
+  detail.runTask ? (detail.runWorkflowLocator?.name ?? detail.runSummary.workflowName) : "not available";
+
 export const formatChatRunDetail = (detail: ChatRunDetail): string =>
   [
     `Run ${detail.runSummary.executionId}`,
@@ -52,7 +55,7 @@ export const formatChatRunDetail = (detail: ChatRunDetail): string =>
       ? [`Run options: ${formatChatRunOptions(detail.runOptions)}`]
       : []),
     ...(detail.workflowTarget ? [`Workflow target: ${detail.workflowTarget}`] : []),
-    `Retry: ${detail.runTask && detail.runWorkflowLocator ? detail.runWorkflowLocator.name : "not available"}`,
+    `Retry: ${formatRetryWorkflowName(detail)}`,
     ...(detail.runWorkflowLocator
       ? [
           `Workflow locator: ${detail.runWorkflowLocator.name} (${detail.runWorkflowLocator.displayPath})`,
