@@ -673,6 +673,36 @@ describe("renderChatView", () => {
     expect(plain).toContain("retry none");
   });
 
+  it("renders old run metadata as retryable without a workflow locator", () => {
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-runs",
+            cwd: "/repo",
+            dryRun: true,
+          }),
+          inspectedRunSummary: runSummary,
+          runChoices: [
+            {
+              runSummary,
+              sessionId: "session-runs",
+              messageId: "assistant:old-run",
+              source: "persisted",
+              runTask: "rerun old task",
+            },
+          ],
+        },
+        { columns: 120 }
+      )
+    );
+
+    const plain = stripAnsi(output);
+    expect(plain).toContain("retry release-readiness");
+    expect(plain).toContain("task rerun old task");
+    expect(plain).not.toContain("retry none project");
+  });
+
   it("renders inspected last-run options in the run detail header", () => {
     const output = renderedText(
       renderChatView(

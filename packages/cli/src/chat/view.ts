@@ -248,6 +248,12 @@ const inspectedRunWorkflow = (
     ? state.lastRunWorkflowLocator
     : undefined);
 
+const retryWorkflowName = (
+  summary: WorkflowRunSummary,
+  task: string | undefined,
+  workflow: WorkflowLocator | undefined
+): string => (task ? (workflow?.name ?? summary.workflowName) : "none");
+
 const inspectedRunOptions = (
   state: ChatSessionState,
   summary: WorkflowRunSummary,
@@ -283,7 +289,7 @@ const runDetailHeaderLines = (
     `${muted("id")} ${summary.executionId}   ${muted("status")} ${summary.status}   ${muted("steps")} ${summary.completedStepCount}/${summary.totalStepCount}`,
     `${muted("workflow")} ${summary.workflowName}   ${formatRunDuration(summary)}`,
     `${muted("task")} ${task ? formatRunTaskPreview(task) : "-"}`,
-    `${muted("retry")} ${task && workflow ? workflow.name : "none"}   ${muted("project")} ${compactPath(projectRoot, 52)}`,
+    `${muted("retry")} ${retryWorkflowName(summary, task, workflow)}   ${muted("project")} ${compactPath(projectRoot, 52)}`,
     ...(options ? [`${muted("options")} ${options}`] : []),
     ...(workflow ? [`${muted("path")} ${compactPath(workflow.displayPath, 72)}`] : []),
     `${muted("summary")} ${summary.message}`,
@@ -396,7 +402,7 @@ const renderRunHistoryMeta = (
       renderRunHistorySource(state, choice),
       `${muted("task")} ${formatRunTaskPreview(choice.runTask)}`,
     ].join("   "),
-    `${muted("retry")} ${choice.runTask && choice.runWorkflowLocator ? choice.runWorkflowLocator.name : "none"}`,
+    `${muted("retry")} ${retryWorkflowName(summary, choice.runTask, choice.runWorkflowLocator)}`,
     ...(formatCompactChatRunOptions(choice.runOptions)
       ? [`${muted("options")} ${formatCompactChatRunOptions(choice.runOptions)}`]
       : []),
