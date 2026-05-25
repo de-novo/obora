@@ -235,6 +235,8 @@ const runDetailStepLines = (
     `${cyan(`#${index + 1}`)} ${bold(step.name)} ${step.status}${step.agent ? ` · ${step.agent}` : ""}${step.model ? ` · ${step.model}` : ""}`,
     ...(step.task ? [`${muted("task")} ${step.task}`] : []),
     `${muted("output")} ${step.outputPreview}`,
+    `${muted("format")} ${step.outputFormat}`,
+    ...(step.methodology ? [`${muted("method")} ${step.methodology}`] : []),
     formatStepToolLine(step),
     formatStepArtifactLine(step),
     formatStepDecisionLine(step),

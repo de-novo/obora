@@ -434,6 +434,7 @@ describe("renderChatView", () => {
           outputFormat: "text",
           toolsUsed: ["file_read"],
           artifacts: ["review.md"],
+          methodology: "Direct repository inspection",
           decisions: ["Inspect changed files"],
           issues: [],
           dependencies: [],
@@ -462,6 +463,8 @@ describe("renderChatView", () => {
     expect(plain).toContain("viewing run exec-inspected  ·  /details exec-inspected");
     expect(plain).toContain("/clear  /runs  /details <runId>");
     expect(plain).toContain("#1 review completed");
+    expect(plain).toContain("format text");
+    expect(plain).toContain("method Direct repository inspection");
     expect(plain).toContain("artifacts review.md");
     expect(plain).not.toContain("id exec-chat-1");
   });
