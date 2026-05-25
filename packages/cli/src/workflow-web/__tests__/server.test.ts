@@ -66,6 +66,7 @@ describe("workflow web bridge", () => {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          revision: payload.revision,
           workflow: {
             name: "release-readiness",
             version: "1.0",
@@ -81,6 +82,7 @@ describe("workflow web bridge", () => {
         mode: "build",
         locator: { name: "release-readiness", scope: "project" },
         workflow: { name: "release-readiness" },
+        revision: expect.any(String),
       });
       expect(saveResponse.status).toBe(200);
       expect(saved).toContain("name: saved");
@@ -149,10 +151,14 @@ describe("workflow web bridge", () => {
   it("persists raw YAML saves and rejects unsupported API methods", async () => {
     await withTempWorkflow(async ({ path, locator }) => {
       const bridge = await startWorkflowWebBridge({ locator, mode: "build", open: false });
+      const payload = await fetch(`${bridge.apiBaseUrl}/api/workflow?token=${bridge.token}`).then(
+        (response) => response.json()
+      );
       const saveResponse = await fetch(`${bridge.apiBaseUrl}/api/workflow?token=${bridge.token}`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          revision: payload.revision,
           yaml: "name: release-readiness\nversion: '1.0'\nsteps:\n  - name: raw-yaml\n    agent: worker\n",
         }),
       });
@@ -169,6 +175,43 @@ describe("workflow web bridge", () => {
       expect(saveResponse.status).toBe(200);
       expect(methodResponse.status).toBe(405);
       expect(saved).toContain("name: raw-yaml");
+    });
+  });
+
+  it("rejects saves without the current workflow revision", async () => {
+    await withTempWorkflow(async ({ path, locator }) => {
+      const bridge = await startWorkflowWebBridge({ locator, mode: "build", open: false });
+      const payload = await fetch(`${bridge.apiBaseUrl}/api/workflow?token=${bridge.token}`).then(
+        (response) => response.json()
+      );
+      await writeFile(
+        path,
+        "name: release-readiness\nversion: '1.0'\nsteps:\n  - name: external-edit\n    agent: worker\n",
+        "utf-8"
+      );
+      const missingRevisionResponse = await fetch(
+        `${bridge.apiBaseUrl}/api/workflow?token=${bridge.token}`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ yaml: "name: missing\nsteps: []\n" }),
+        }
+      );
+      const staleRevisionResponse = await fetch(
+        `${bridge.apiBaseUrl}/api/workflow?token=${bridge.token}`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ yaml: "name: stale\nsteps: []\n", revision: payload.revision }),
+        }
+      );
+      const saved = await readFile(path, "utf-8");
+
+      await bridge.close();
+
+      expect(missingRevisionResponse.status).toBe(409);
+      expect(staleRevisionResponse.status).toBe(409);
+      expect(saved).toContain("name: external-edit");
     });
   });
 

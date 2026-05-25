@@ -182,6 +182,7 @@ export const renderWorkflowWebHtml = ({
         const response = await fetch(apiUrl);
         const payload = await response.json();
         yamlEl.value = payload.yaml;
+        yamlEl.dataset.revision = payload.revision;
         setStatus("Loaded");
       };
       const saveWorkflow = async () => {
@@ -189,9 +190,13 @@ export const renderWorkflowWebHtml = ({
         const response = await fetch(apiUrl, {
           method: "PUT",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ yaml: yamlEl.value })
+          body: JSON.stringify({ yaml: yamlEl.value, revision: yamlEl.dataset.revision })
         });
-        setStatus(response.ok ? "Saved" : "Save failed");
+        const payload = await response.json();
+        if (response.ok) {
+          yamlEl.dataset.revision = payload.revision;
+        }
+        setStatus(response.ok ? "Saved" : payload.error || "Save failed");
       };
       reloadEl.addEventListener("click", () => loadWorkflow().catch((error) => setStatus(String(error))));
       saveEl.addEventListener("click", () => saveWorkflow().catch((error) => setStatus(String(error))));

@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { stringify as stringifyYaml } from "yaml";
 
 import { discoverWorkflowLocators, readWorkflow, resolveWorkflowTarget } from "@obora/sdk";
@@ -56,19 +56,26 @@ const parseBodyAsRecord = async (request: IncomingMessage): Promise<Record<strin
   return isRecord(parsed) ? parsed : {};
 };
 
+const workflowRevision = async (path: string): Promise<string> => {
+  const fileStat = await stat(path);
+  return `${fileStat.size}:${Math.trunc(fileStat.mtimeMs)}`;
+};
+
 const responseForWorkflow = async ({
   mode,
   locator,
 }: WorkflowWebBridgeOptions): Promise<Record<string, unknown>> => {
-  const [workflow, yaml] = await Promise.all([
+  const [workflow, yaml, revision] = await Promise.all([
     readWorkflow(locator.path),
     readFile(locator.path, "utf-8"),
+    workflowRevision(locator.path),
   ]);
   return {
     mode,
     locator,
     workflow,
     yaml,
+    revision,
   };
 };
 
@@ -144,7 +151,11 @@ const handleWorkflowResolveRequest = async (
     return;
   }
 
-  sendJson(response, 200, await resolveWorkflowTarget(await resolveRequestFromBody(request, options)));
+  sendJson(
+    response,
+    200,
+    await resolveWorkflowTarget(await resolveRequestFromBody(request, options))
+  );
 };
 
 const handleApiRequest = async (
@@ -164,6 +175,17 @@ const handleApiRequest = async (
     }
 
     const body = await parseBodyAsRecord(request);
+    const revision = typeof body.revision === "string" ? body.revision : undefined;
+    const currentRevision = await workflowRevision(options.locator.path);
+    if (!revision) {
+      sendError(response, 409, "Workflow revision is required before saving.");
+      return;
+    }
+    if (revision !== currentRevision) {
+      sendError(response, 409, "Workflow changed on disk. Reload before saving.");
+      return;
+    }
+
     await writeFile(options.locator.path, yamlFromSaveBody(body), "utf-8");
     sendJson(response, 200, await responseForWorkflow(options));
     return;
