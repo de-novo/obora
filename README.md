@@ -149,7 +149,7 @@ Use this authoring rule for reusable workflows:
 - **agents inspect the repository at execution time and choose files, directories, and change scope from local context**
 - **do not hard-code task-specific directories, file lists, or framework choices in reusable workflow prompts unless the workflow is intentionally specialized**
 
-For iterative work, use `obora chat` with a stable `--session`; saved chat runs can be listed with `obora chat --list-runs` to see task/retry targets and inspected with `obora chat --show-run <executionId>` to review step outputs, tools, artifacts, decisions, dependencies, and issues.
+For iterative work, use `obora chat` with a stable `--session`; inside the TUI, `/runs` lists saved chat runs, `/details 1` inspects a numbered run, and `/retry 1` reruns a saved task. Outside the TUI, saved chat runs can be listed with `obora chat --list-runs` and inspected with `obora chat --show-run <executionId>` to review step outputs, tools, artifacts, decisions, dependencies, and issues.
 
 ### Runnable example
 
