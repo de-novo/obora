@@ -719,6 +719,8 @@ const withResolvedWorkflow = (
   workflowChoices: undefined,
   inspectedRunSummary: undefined,
   runChoices: undefined,
+  sessionChoices: undefined,
+  showHelpPanel: undefined,
   status: "ready",
   lastError: undefined,
 });
