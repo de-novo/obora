@@ -748,7 +748,7 @@ const withRetryContextFromRunDetail = (
         ...state,
         lastRunTask: runTask,
         lastRunWorkflowLocator: runWorkflowLocator,
-        ...(runOptions ? { lastRunOptions: runOptions } : {}),
+        lastRunOptions: runOptions,
         lastRunCommand: `obora run ${runWorkflowLocator.displayPath}`,
       }
     : state;
@@ -1116,7 +1116,7 @@ const runChatTask = ({
             lastRunCommand,
             lastRunTask: message,
             lastRunWorkflowLocator: workflowLocator,
-            ...(hasRunMetadataOptions ? { lastRunOptions: runMetadataOptions } : {}),
+            lastRunOptions: hasRunMetadataOptions ? runMetadataOptions : undefined,
             ...(runSummary ? { lastRunSummary: runSummary } : {}),
           },
           formatRunSummaryMessage(runSummary, commandOptions.dryRun),
@@ -1140,7 +1140,7 @@ const runChatTask = ({
             lastRunCommand,
             lastRunTask: message,
             lastRunWorkflowLocator: workflowLocator,
-            ...(hasRunMetadataOptions ? { lastRunOptions: runMetadataOptions } : {}),
+            lastRunOptions: hasRunMetadataOptions ? runMetadataOptions : undefined,
           },
           `Workflow run failed: ${failureMessage}`
         ),

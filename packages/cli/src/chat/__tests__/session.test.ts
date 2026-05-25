@@ -801,6 +801,35 @@ describe("chat session", () => {
     expect(result.state.messages.at(-2)?.content).toBe("review the recent CLI changes");
   });
 
+  it("clears stale run options when a new chat task has no run options", async () => {
+    const runWorkflowWithResult = vi.fn(async () => executionResult);
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: false,
+      }),
+      workflowLocator: locator,
+      status: "ready" as const,
+      lastRunOptions: {
+        provider: "openrouter",
+        model: "openrouter/owl-alpha",
+        timeout: 2500,
+      },
+    };
+
+    const ran = await handleChatInput({
+      input: "perform the release check",
+      state,
+      resolveWorkflow,
+      runWorkflow: runWorkflowWithResult,
+      commandOptions: {},
+    });
+
+    expect(ran.state.lastRunOptions).toBeUndefined();
+    expect(ran.state.messages.at(-1)?.runOptions).toBeUndefined();
+  });
+
   it("runs an explicit workflow override without a default workflow selected", async () => {
     vi.clearAllMocks();
     const state = createInitialChatState({
@@ -1688,6 +1717,55 @@ describe("chat session", () => {
       })
     );
     expect(retried.state.lastRunWorkflowLocator).toBe(locator);
+  });
+
+  it("clears stale retry options when opening a persisted run without options", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const findRun = vi.fn(async () => ({
+      sessionId: "session-a",
+      messageId: "assistant:run",
+      messageCreatedAt: "2026-05-21T00:00:02.000Z",
+      runTask: "perform the release check",
+      runWorkflowLocator: locator,
+      runSummary,
+    }));
+    const state = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      lastRunOptions: {
+        provider: "openrouter",
+        model: "openrouter/owl-alpha",
+        timeout: 2500,
+      },
+    };
+
+    const opened = await handleChatInput({
+      input: "/details exec-chat-1",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      findRun,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(opened.state.lastRunOptions).toBeUndefined();
+
+    vi.clearAllMocks();
+    await handleChatInput({
+      input: "/retry",
+      state: opened.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflow).toHaveBeenCalledWith(
+      locator.path,
+      expect.not.objectContaining({
+        provider: "openrouter",
+        model: "openrouter/owl-alpha",
+        timeout: 2500,
+      })
+    );
   });
 
   it("does not query persisted run details when a memory summary matches", async () => {
