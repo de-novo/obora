@@ -55,8 +55,23 @@ interface ChatCommandJson {
   readonly messages?: ReadonlyArray<{ readonly content?: string }>;
 }
 
+interface ChatSessionJson {
+  readonly sessionId?: string;
+  readonly projectRoot?: string;
+  readonly tags?: ReadonlyArray<string>;
+  readonly lastRunWorkflowName?: string;
+}
+
+interface ChatSessionGroupJson {
+  readonly group?: string;
+  readonly sessions?: ReadonlyArray<ChatSessionJson>;
+}
+
 const lastJsonOutput = (): ChatCommandJson =>
   JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0] ?? "{}")) as unknown as ChatCommandJson;
+
+const lastJsonArrayOutput = <T>(): ReadonlyArray<T> =>
+  JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0] ?? "[]")) as unknown as ReadonlyArray<T>;
 
 const withTempProject = async (
   testFn: (input: {
@@ -273,6 +288,113 @@ describe("chat command with workflow web saves", () => {
       expect(persisted.workflowLocator?.name).toBe("code-review");
       expect(persisted.lastRunWorkflowLocator?.name).toBe("code-review");
       expect(persisted.lastRunTask).toBe("review changes");
+    });
+  });
+
+  it("lists persisted chat sessions by project, tag, and grouped views", async () => {
+    await withTempProject(async ({ root, globalDir }) => {
+      const serviceRoot = join(root, "services", "api");
+      const serviceWorkflowDir = join(serviceRoot, ".obora", "workflows");
+      const serviceWorkflowPath = join(serviceWorkflowDir, "release-readiness.yaml");
+      await mkdir(serviceWorkflowDir, { recursive: true });
+      await writeNamedWorkflow(
+        serviceWorkflowPath,
+        "release-readiness",
+        "Service release workflow"
+      );
+
+      await createCLI().parseAsync(
+        [
+          "chat",
+          "release-readiness",
+          "--once",
+          "prepare release",
+          "--dry-run",
+          "--scope",
+          "project",
+          "--project",
+          root,
+          "--global-workflows-dir",
+          globalDir,
+          "--session",
+          "release-session",
+          "--tags",
+          "release,ops",
+          "--json",
+        ],
+        { from: "user" }
+      );
+
+      await createCLI().parseAsync(
+        [
+          "chat",
+          "release-readiness",
+          "--once",
+          "review service",
+          "--dry-run",
+          "--scope",
+          "project",
+          "--project",
+          serviceRoot,
+          "--global-workflows-dir",
+          globalDir,
+          "--session",
+          "service-session",
+          "--tags",
+          "review",
+          "--json",
+        ],
+        { from: "user" }
+      );
+
+      await createCLI().parseAsync(["chat", "--list-sessions", "--filter-tag", "release", "--json"], {
+        from: "user",
+      });
+      const releaseSessions = lastJsonArrayOutput<ChatSessionJson>();
+
+      await createCLI().parseAsync(
+        ["chat", "--list-sessions", "--filter-project", serviceRoot, "--json"],
+        { from: "user" }
+      );
+      const serviceSessions = lastJsonArrayOutput<ChatSessionJson>();
+
+      await createCLI().parseAsync(["chat", "--list-sessions", "--group-sessions", "project", "--json"], {
+        from: "user",
+      });
+      const projectGroups = lastJsonArrayOutput<ChatSessionGroupJson>();
+
+      await createCLI().parseAsync(["chat", "--list-sessions", "--group-sessions", "tag", "--json"], {
+        from: "user",
+      });
+      const tagGroups = lastJsonArrayOutput<ChatSessionGroupJson>();
+
+      await createCLI().parseAsync(["chat", "--list-sessions", "--group-sessions", "day", "--json"], {
+        from: "user",
+      });
+      const dayGroups = lastJsonArrayOutput<ChatSessionGroupJson>();
+
+      expect(releaseSessions.map((session) => session.sessionId)).toEqual(["release-session"]);
+      expect(releaseSessions.at(0)?.tags).toEqual(["release", "ops"]);
+      expect(serviceSessions.map((session) => session.sessionId)).toEqual(["service-session"]);
+      expect(serviceSessions.at(0)?.projectRoot).toBe(serviceRoot);
+      expect(projectGroups.map((group) => group.group).sort()).toEqual([root, serviceRoot].sort());
+      expect(
+        projectGroups.find((group) => group.group === serviceRoot)?.sessions?.map(
+          (session) => session.sessionId
+        )
+      ).toEqual(["service-session"]);
+      expect(tagGroups.map((group) => group.group).sort()).toEqual(["ops", "release", "review"]);
+      expect(
+        tagGroups.find((group) => group.group === "ops")?.sessions?.map(
+          (session) => session.sessionId
+        )
+      ).toEqual(["release-session"]);
+      expect(dayGroups).toHaveLength(1);
+      expect(dayGroups.at(0)?.group).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+      expect(dayGroups.at(0)?.sessions?.map((session) => session.sessionId).sort()).toEqual([
+        "release-session",
+        "service-session",
+      ]);
     });
   });
 });
