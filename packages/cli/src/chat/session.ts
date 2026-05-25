@@ -39,6 +39,7 @@ import {
   toChatRunChoice,
   type ChatRunChoiceInput,
 } from "./run-choices.js";
+import { isRunStatusFilter, runStatusFilterUsage } from "./run-status-filter.js";
 import {
   createChatRunInput,
   listChatWorkflowLocators,
@@ -456,10 +457,12 @@ const runListFilterFromCommand = (
     (!hasOption("--session") || Boolean(sessionTarget)) &&
     (!hasOption("--tag") || Boolean(optionValue("--tag"))) &&
     (!hasOption("--status") || Boolean(optionValue("--status")));
+  const statusFilter = statusShortcut ?? optionValue("--status");
+  const hasValidStatus = !statusFilter || isRunStatusFilter(statusFilter);
 
-  return statusShortcut
+  return statusShortcut && hasValidStatus
     ? { status: statusShortcut }
-    : !hasKnownOption || hasUnknownOption || !hasRequiredValue
+    : !hasKnownOption || hasUnknownOption || !hasRequiredValue || !hasValidStatus
     ? undefined
     : sessionFilter?.missingChoice
       ? { missingChoice: true }
@@ -467,7 +470,7 @@ const runListFilterFromCommand = (
           ...(sessionFilter ? { sessionId: sessionFilter.sessionId } : {}),
           ...(hasOption("--project") ? { projectRoot } : {}),
           ...(optionValue("--tag") ? { tag: optionValue("--tag") } : {}),
-          ...(optionValue("--status") ? { status: optionValue("--status") } : {}),
+          ...(statusFilter ? { status: statusFilter } : {}),
         };
 };
 
@@ -1150,7 +1153,7 @@ export const handleChatInput = async ({
       return {
         state: appendAssistant(
           withoutPanels(state),
-          "Usage: /runs, /runs failed, /runs --all, /runs --session <id-or-number>, /runs --project [path], /runs --tag <tag>, or /runs --status <status>."
+          `Usage: /runs, /runs failed, /runs --all, /runs --session <id-or-number>, /runs --project [path], /runs --tag <tag>, or /runs --status <${runStatusFilterUsage()}>.`
         ),
         exit: false,
       };

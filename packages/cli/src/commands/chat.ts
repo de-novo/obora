@@ -2,6 +2,7 @@ import { Command } from "commander";
 
 import { runChatSession } from "../chat/session.js";
 import { formatChatRunDetail } from "../chat/run-detail-format.js";
+import { isRunStatusFilter, runStatusFilterUsage } from "../chat/run-status-filter.js";
 import {
   findChatRunDetail,
   groupChatSessionSummaries,
@@ -108,6 +109,12 @@ export function createChatCommand(): Command {
           }
 
           if (options.listRuns) {
+            if (options.filterRunStatus && !isRunStatusFilter(options.filterRunStatus)) {
+              throw new CLIError(
+                `Invalid run status filter: ${options.filterRunStatus}. Expected one of ${runStatusFilterUsage()}.`,
+                ExitCode.CLI_ERROR
+              );
+            }
             const runs = await listChatRunDetails({
               cwd: process.cwd(),
               ...(options.session ? { sessionId: options.session } : {}),

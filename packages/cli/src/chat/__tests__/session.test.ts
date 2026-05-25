@@ -1706,9 +1706,16 @@ describe("chat session", () => {
       runWorkflow,
       commandOptions: { dryRun: true },
     });
+    const invalidStatus = await handleChatInput({
+      input: "/runs typo",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
 
     expect(invalid.state.messages.at(-1)?.content).toContain(
-      "Usage: /runs, /runs failed, /runs --all, /runs --session <id-or-number>, /runs --project [path], /runs --tag <tag>, or /runs --status <status>."
+      "Usage: /runs, /runs failed, /runs --all, /runs --session <id-or-number>, /runs --project [path], /runs --tag <tag>, or /runs --status <queued|running|waiting|suspended|completed|failed|aborted>."
     );
     expect(invalid.state.inspectedRunSummary).toBeUndefined();
     expect(invalid.state.runChoices).toBeUndefined();
@@ -1717,6 +1724,7 @@ describe("chat session", () => {
     expect(invalid.state.showHelpPanel).toBeUndefined();
     expect(missingTag.state.messages.at(-1)?.content).toContain("Usage: /runs");
     expect(missingStatus.state.messages.at(-1)?.content).toContain("Usage: /runs");
+    expect(invalidStatus.state.messages.at(-1)?.content).toContain("Usage: /runs");
     expect(missingChoice.state.messages.at(-1)?.content).toContain(
       "Session choice not found. Run /sessions first."
     );

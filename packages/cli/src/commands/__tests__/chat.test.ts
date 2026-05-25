@@ -476,6 +476,22 @@ describe("chat command", () => {
     );
   });
 
+  it("fails clearly for invalid persisted chat run status filters", async () => {
+    vi.mocked(listChatRunDetails).mockResolvedValue([]);
+
+    await createChatCommand().parseAsync(
+      ["--list-runs", "--filter-run-status", "typo"],
+      { from: "user" }
+    );
+
+    expect(listChatRunDetails).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "Invalid run status filter: typo. Expected one of queued|running|waiting|suspended|completed|failed|aborted."
+      )
+    );
+  });
+
   it("prints persisted chat runs as JSON", async () => {
     vi.mocked(listChatRunDetails).mockResolvedValue([
       {
