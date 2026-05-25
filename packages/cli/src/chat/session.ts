@@ -362,6 +362,15 @@ const clearPanels = (state: ChatSessionState): ChatSessionState =>
         showHelpPanel: undefined,
       };
 
+const withoutPanels = (state: ChatSessionState): ChatSessionState => ({
+  ...state,
+  inspectedRunSummary: undefined,
+  runChoices: undefined,
+  sessionChoices: undefined,
+  workflowChoices: undefined,
+  showHelpPanel: undefined,
+});
+
 const hasPickerPanel = (state: ChatSessionState): boolean =>
   Boolean(
     (state.runChoices && state.runChoices.length > 0) ||
@@ -764,7 +773,7 @@ const runChatTask = ({
   readonly runWorkflow: typeof runRun;
   readonly commandOptions: ChatCommandOptions;
 }): Promise<ChatTurnResult> => {
-  const userState = appendChatMessage(state, createChatMessage("user", message));
+  const userState = appendChatMessage(withoutPanels(state), createChatMessage("user", message));
   const runningState = setChatStatus(userState, "running");
   const runInput = createChatRunInput({
     message,

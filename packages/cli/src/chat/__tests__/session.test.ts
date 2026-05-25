@@ -2509,6 +2509,51 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("Usage: /run <task>");
   });
 
+  it("closes open panels when running a numbered workflow choice", async () => {
+    const runWorkflowWithResult = vi.fn(async () => executionResult);
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: false,
+      }),
+      workflowChoices: [locator, codeReviewLocator],
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      showHelpPanel: true,
+    };
+
+    const result = await handleChatInput({
+      input: "/run #1 inspect the branch",
+      state,
+      resolveWorkflow,
+      runWorkflow: runWorkflowWithResult,
+      commandOptions: { provider: "openrouter", model: "openrouter/owl-alpha" },
+    });
+
+    expect(runWorkflowWithResult).toHaveBeenCalledOnce();
+    expect(result.state.lastRunSummary?.executionId).toBe("exec-chat-1");
+    expect(result.state.inspectedRunSummary).toBeUndefined();
+    expect(result.state.runChoices).toBeUndefined();
+    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.showHelpPanel).toBeUndefined();
+    expect(result.state.messages.at(-1)?.content).toContain("Workflow completed");
+  });
+
   it("reports missing numbered workflow choices clearly", async () => {
     vi.clearAllMocks();
     const state = createInitialChatState({
