@@ -321,6 +321,38 @@ const findRunSummaryInState = (
     ? state.inspectedRunSummary
     : undefined);
 
+const findRunChoiceInState = (
+  state: ChatSessionState,
+  executionId: string
+): ChatRunChoice | undefined =>
+  state.messages
+    .flatMap((message) =>
+      message.runSummary?.executionId === executionId
+        ? [
+            {
+              runSummary: message.runSummary,
+              messageId: message.id,
+              source: "message",
+              ...(message.runTask ? { runTask: message.runTask } : {}),
+              ...(message.runWorkflowLocator
+                ? { runWorkflowLocator: message.runWorkflowLocator }
+                : {}),
+            },
+          ]
+        : []
+    )
+    .at(0) ??
+  (state.lastRunSummary?.executionId === executionId
+    ? {
+        runSummary: state.lastRunSummary,
+        source: "lastRunSummary",
+        ...(state.lastRunTask ? { runTask: state.lastRunTask } : {}),
+        ...(state.lastRunWorkflowLocator
+          ? { runWorkflowLocator: state.lastRunWorkflowLocator }
+          : {}),
+      }
+    : undefined);
+
 const uniqueRunSummaries = (
   summaries: ReadonlyArray<WorkflowRunSummary | undefined>
 ): ReadonlyArray<WorkflowRunSummary> =>
@@ -1558,6 +1590,9 @@ export const handleChatInput = async ({
   if (detailsExecutionId) {
     const choiceIndex = runChoiceIndexFromTarget(detailsExecutionId);
     const choice = choiceIndex === undefined ? undefined : runChoiceEntryAt(state, choiceIndex);
+    const stateChoice =
+      choice ??
+      (choiceIndex === undefined ? findRunChoiceInState(state, detailsExecutionId) : undefined);
     if (choiceIndex !== undefined && !choice) {
       return {
         state: appendAssistant(
@@ -1567,7 +1602,7 @@ export const handleChatInput = async ({
         exit: false,
       };
     }
-    const choiceSummary = choice ? runChoiceSummary(choice) : undefined;
+    const choiceSummary = stateChoice ? runChoiceSummary(stateChoice) : undefined;
     const stateSummary = choiceSummary ?? findRunSummaryInState(state, detailsExecutionId);
     const persistedDetail = stateSummary
       ? undefined
@@ -1583,12 +1618,12 @@ export const handleChatInput = async ({
         summary
           ? withRetryContextFromRunDetail(
               withInspectedRunSummary(state, summary, runChoices),
-              choice,
+              stateChoice,
               persistedDetail
             )
           : clearPanels(state),
         summary
-          ? openedRunDetailsMessage(summary, choice, persistedDetail)
+          ? openedRunDetailsMessage(summary, stateChoice, persistedDetail)
           : `Run details not found: ${detailsExecutionId}`
       ),
       exit: false,

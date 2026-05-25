@@ -369,6 +369,41 @@ const verifyCliChatWorkflowSwitchSmoke = async (tmpDir) => {
     'run history must keep the beta task and locator',
   );
 
+  const alphaDetail = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --show-run alpha after workflow switch',
+    args: ['--json', 'chat', '--show-run', alphaExecutionId, '--session', sessionId],
+  });
+  assert(
+    alphaDetail.workflowTarget === 'alpha.yaml',
+    'show-run must keep the alpha workflow target after switching to beta',
+  );
+  assert(alphaDetail.runTask === alphaTask, 'show-run must keep the alpha task');
+  assert(
+    alphaDetail.runWorkflowLocator?.name === 'alpha-switch-workflow',
+    'show-run must keep the alpha workflow locator',
+  );
+
+  const alphaDetailsState = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat /details alpha after workflow switch',
+    args: ['--json', 'chat', '--session', sessionId, '--once', `/details ${alphaExecutionId}`],
+  });
+  assert(
+    alphaDetailsState.inspectedRunSummary?.executionId === alphaExecutionId,
+    'chat /details must inspect the alpha run after switching to beta',
+  );
+  assert(
+    alphaDetailsState.lastRunTask === alphaTask,
+    'chat /details must restore alpha retry task after switching to beta',
+  );
+  assert(
+    alphaDetailsState.lastRunWorkflowLocator?.name === 'alpha-switch-workflow',
+    'chat /details must restore alpha retry workflow after switching to beta',
+  );
+
   console.log('[PASS] Built CLI chat workflow switch smoke passed.');
 };
 

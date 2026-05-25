@@ -796,6 +796,11 @@ describe("chat session", () => {
     });
     expect(result.state.inspectedRunSummary).toBeUndefined();
     expect(lastMessage?.content).toContain("Workflow completed: 2/2 steps completed.");
+    expect(lastMessage).toMatchObject({
+      workflowTarget: ".obora/workflows/release-readiness.yaml",
+      runTask: "perform the release check",
+      runWorkflowLocator: { name: "release-readiness" },
+    });
     expect(lastMessage?.runSummary?.steps[0]).toMatchObject({
       name: "collect",
       model: "openrouter/owl-alpha",
@@ -1543,6 +1548,44 @@ describe("chat session", () => {
     expect(findRun).not.toHaveBeenCalled();
     expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
     expect(opened.state.messages.at(-1)?.content).toBe("Opened run details exec-chat-1.");
+  });
+
+  it("restores message-level retry context when opening details after workflow switching", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const findRun = vi.fn(async () => undefined);
+    const state = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      workflowTarget: "code-review",
+      workflowLocator: codeReviewLocator,
+      messages: [
+        {
+          id: "assistant:release-run",
+          role: "assistant" as const,
+          content: "Workflow completed.",
+          createdAt: "2026-05-21T00:00:02.000Z",
+          workflowTarget: "release-readiness",
+          runTask: "perform the release check",
+          runWorkflowLocator: locator,
+          runSummary,
+        },
+      ],
+    };
+
+    const opened = await handleChatInput({
+      input: "/details exec-chat-1",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      findRun,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(findRun).not.toHaveBeenCalled();
+    expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
+    expect(opened.state.lastRunTask).toBe("perform the release check");
+    expect(opened.state.lastRunWorkflowLocator).toBe(locator);
+    expect(opened.state.workflowLocator).toBe(codeReviewLocator);
+    expect(opened.state.messages.at(-1)?.content).toContain("Use /retry to rerun this task.");
   });
 
   it("opens numbered run details with a source session switch hint", async () => {
