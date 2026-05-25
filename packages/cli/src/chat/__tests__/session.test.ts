@@ -148,6 +148,54 @@ describe("chat session", () => {
     expect(ran.state.messages.at(-1)?.content).toContain("Dry-run completed");
   });
 
+  it("opens help as the active panel and clears stale panel context", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      inspectedRunSummary: runSummary,
+      runChoices: [
+        {
+          runSummary,
+          sessionId: "session-a",
+          messageId: "assistant:run",
+          source: "persisted" as const,
+        },
+      ],
+      workflowChoices: [locator],
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["ops"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+    };
+
+    const help = await handleChatInput({
+      input: "/help",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(help.state.showHelpPanel).toBe(true);
+    expect(help.state.inspectedRunSummary).toBeUndefined();
+    expect(help.state.runChoices).toBeUndefined();
+    expect(help.state.workflowChoices).toBeUndefined();
+    expect(help.state.sessionChoices).toBeUndefined();
+    expect(help.state.messages.at(-1)?.content).toBe("Opened help panel.");
+  });
+
   it("handles exit commands", async () => {
     const state = createInitialChatState({
       sessionId: "session-a",

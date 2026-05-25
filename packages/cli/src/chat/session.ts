@@ -378,6 +378,15 @@ const clearPanelMessage = (state: ChatSessionState): string =>
         ? "Closed selection panels."
         : "No panel is open.";
 
+const withHelpPanel = (state: ChatSessionState): ChatSessionState => ({
+  ...state,
+  inspectedRunSummary: undefined,
+  runChoices: undefined,
+  sessionChoices: undefined,
+  workflowChoices: undefined,
+  showHelpPanel: true,
+});
+
 const formatRunListMessage = (summaries: ReadonlyArray<WorkflowRunSummary>): string =>
   summaries.length > 0
     ? [
@@ -845,7 +854,7 @@ export const handleChatInput = async ({
 
   if (trimmed === "/help") {
     return {
-      state: appendAssistant({ ...state, showHelpPanel: true }, "Opened help panel."),
+      state: appendAssistant(withHelpPanel(state), "Opened help panel."),
       exit: false,
     };
   }
