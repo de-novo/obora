@@ -341,6 +341,59 @@ describe("chat session", () => {
     expect(result.state.status).toBe("ready");
   });
 
+  it("keeps chat open when workflow override resolution fails", async () => {
+    vi.clearAllMocks();
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const resolveWorkflowFailure = vi.fn(async () => {
+      throw "provider lookup failed";
+    });
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      workflowChoices: [locator],
+      showHelpPanel: true,
+    };
+
+    const result = await handleChatInput({
+      input: "/run --workflow missing inspect docs",
+      state,
+      resolveWorkflow: resolveWorkflowFailure,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(resolveWorkflowFailure).toHaveBeenCalledWith("missing", undefined);
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(result.exit).toBe(false);
+    expect(result.state.status).toBe("failed");
+    expect(result.state.lastError).toBe("provider lookup failed");
+    expect(result.state.inspectedRunSummary).toBeUndefined();
+    expect(result.state.runChoices).toBeUndefined();
+    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.showHelpPanel).toBeUndefined();
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Workflow resolve failed: provider lookup failed"
+    );
+  });
+
   it("stores returned workflow execution details as a one-message run summary", async () => {
     const runWorkflowWithResult = vi.fn(async () => executionResult);
     const selected = {
@@ -2633,6 +2686,59 @@ describe("chat session", () => {
     expect(resolveWorkflowForProject).toHaveBeenCalledWith(
       "release-readiness",
       "/repo/packages/cli"
+    );
+  });
+
+  it("keeps chat open when workflow selection resolution fails", async () => {
+    vi.clearAllMocks();
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const resolveWorkflowFailure = vi.fn(async () => {
+      throw new Error("Workflow not found: missing-workflow");
+    });
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      workflowChoices: [locator],
+      showHelpPanel: true,
+    };
+
+    const result = await handleChatInput({
+      input: "/workflow missing-workflow",
+      state,
+      resolveWorkflow: resolveWorkflowFailure,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(resolveWorkflowFailure).toHaveBeenCalledWith("missing-workflow", undefined);
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(result.exit).toBe(false);
+    expect(result.state.status).toBe("failed");
+    expect(result.state.lastError).toBe("Workflow not found: missing-workflow");
+    expect(result.state.inspectedRunSummary).toBeUndefined();
+    expect(result.state.runChoices).toBeUndefined();
+    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.showHelpPanel).toBeUndefined();
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Workflow resolve failed: Workflow not found: missing-workflow"
     );
   });
 

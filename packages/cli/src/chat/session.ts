@@ -818,6 +818,20 @@ const runChatTask = ({
     });
 };
 
+const workflowResolveFailureResult = (
+  state: ChatSessionState,
+  error: unknown
+): ChatTurnResult => {
+  const message = errorMessage(error);
+  return {
+    state: appendAssistant(
+      setChatStatus(withoutPanels(state), "failed", message),
+      `Workflow resolve failed: ${message}`
+    ),
+    exit: false,
+  };
+};
+
 const resolveWorkflowForSession =
   (options: ChatSessionRuntimeOptions, scope: WorkflowResolveScope | undefined) =>
   async (target: string, projectRoot?: string): Promise<WorkflowLocator> =>
@@ -1175,14 +1189,15 @@ export const handleChatInput = async ({
       };
     }
     const resolvingState = setChatStatus(state, "resolving");
-    const locator = await resolveWorkflow(workflowTarget, state.projectRoot);
-    return {
-      state: appendAssistant(
-        withResolvedWorkflow(resolvingState, workflowTarget, locator),
-        `Selected workflow ${locator.name} (${locator.scope}).`
-      ),
-      exit: false,
-    };
+    return resolveWorkflow(workflowTarget, state.projectRoot)
+      .then((locator): ChatTurnResult => ({
+        state: appendAssistant(
+          withResolvedWorkflow(resolvingState, workflowTarget, locator),
+          `Selected workflow ${locator.name} (${locator.scope}).`
+        ),
+        exit: false,
+      }))
+      .catch((error: unknown): ChatTurnResult => workflowResolveFailureResult(state, error));
   }
 
   if (isClearRunDetailsCommand(trimmed)) {
@@ -1261,14 +1276,17 @@ export const handleChatInput = async ({
 
   const runOverride = runWorkflowOverrideFromInput(trimmed);
   if (runOverride) {
-    const locator = await resolveWorkflow(runOverride.workflowTarget, state.projectRoot);
-    return runChatTask({
-      state: setChatStatus(state, "resolving"),
-      workflowLocator: locator,
-      message: runOverride.message,
-      runWorkflow,
-      commandOptions,
-    });
+    return resolveWorkflow(runOverride.workflowTarget, state.projectRoot)
+      .then((locator): Promise<ChatTurnResult> =>
+        runChatTask({
+          state: setChatStatus(state, "resolving"),
+          workflowLocator: locator,
+          message: runOverride.message,
+          runWorkflow,
+          commandOptions,
+        })
+      )
+      .catch((error: unknown): ChatTurnResult => workflowResolveFailureResult(state, error));
   }
 
   if (!state.workflowLocator) {
