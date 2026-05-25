@@ -1730,7 +1730,9 @@ describe("chat session", () => {
     );
     expect(missingChoice.state.inspectedRunSummary).toBeUndefined();
     expect(missingChoice.state.runChoices).toBeUndefined();
-    expect(missingChoice.state.sessionChoices).toBeUndefined();
+    expect(missingChoice.state.sessionChoices?.map((session) => session.sessionId)).toEqual([
+      "session-b",
+    ]);
     expect(missingChoice.state.workflowChoices).toBeUndefined();
     expect(missingChoice.state.showHelpPanel).toBeUndefined();
   });
@@ -2682,14 +2684,26 @@ describe("chat session", () => {
 
   it("reports missing numbered session choices without loading numeric ids", async () => {
     const loadSession = vi.fn(async (_sessionId: string) => undefined);
-    const state = createInitialChatState({
-      sessionId: "session-a",
-      cwd: "/repo",
-      dryRun: true,
-    });
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          tags: [],
+          messageCount: 1,
+          updatedAt: "2026-05-24T00:00:00.000Z",
+        },
+      ],
+    };
 
     const result = await handleChatInput({
-      input: "/session 1",
+      input: "/session 2",
       state,
       resolveWorkflow,
       runWorkflow,
@@ -2698,6 +2712,9 @@ describe("chat session", () => {
     });
 
     expect(loadSession).not.toHaveBeenCalled();
+    expect(result.state.sessionChoices?.map((session) => session.sessionId)).toEqual([
+      "session-b",
+    ]);
     expect(result.state.messages.at(-1)?.content).toContain("Session choice not found.");
   });
 
@@ -3077,14 +3094,26 @@ describe("chat session", () => {
 
   it("reports missing numbered choices when renaming sessions", async () => {
     const renameSession = vi.fn(async (_fromSessionId: string, _toSessionId: string) => undefined);
-    const state = createInitialChatState({
-      sessionId: "session-a",
-      cwd: "/repo",
-      dryRun: true,
-    });
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          tags: [],
+          messageCount: 1,
+          updatedAt: "2026-05-24T00:00:00.000Z",
+        },
+      ],
+    };
 
     const result = await handleChatInput({
-      input: "/session rename 1 renamed",
+      input: "/session rename 2 renamed",
       state,
       resolveWorkflow,
       runWorkflow,
@@ -3093,6 +3122,9 @@ describe("chat session", () => {
     });
 
     expect(renameSession).not.toHaveBeenCalled();
+    expect(result.state.sessionChoices?.map((session) => session.sessionId)).toEqual([
+      "session-b",
+    ]);
     expect(result.state.messages.at(-1)?.content).toContain("Session choice not found.");
   });
 
@@ -3143,14 +3175,26 @@ describe("chat session", () => {
 
   it("reports missing numbered choices when deleting sessions", async () => {
     const deleteSession = vi.fn(async (_sessionId: string) => true);
-    const state = createInitialChatState({
-      sessionId: "session-a",
-      cwd: "/repo",
-      dryRun: true,
-    });
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          tags: [],
+          messageCount: 1,
+          updatedAt: "2026-05-24T00:00:00.000Z",
+        },
+      ],
+    };
 
     const result = await handleChatInput({
-      input: "/session delete 1",
+      input: "/session delete 2",
       state,
       resolveWorkflow,
       runWorkflow,
@@ -3159,6 +3203,9 @@ describe("chat session", () => {
     });
 
     expect(deleteSession).not.toHaveBeenCalled();
+    expect(result.state.sessionChoices?.map((session) => session.sessionId)).toEqual([
+      "session-b",
+    ]);
     expect(result.state.messages.at(-1)?.content).toContain("Session choice not found.");
   });
 

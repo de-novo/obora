@@ -393,6 +393,13 @@ const withoutPanels = (state: ChatSessionState): ChatSessionState => ({
   showHelpPanel: undefined,
 });
 
+const withSessionChoicesOnly = (state: ChatSessionState): ChatSessionState => ({
+  ...withoutPanels(state),
+  ...(state.sessionChoices && state.sessionChoices.length > 0
+    ? { sessionChoices: state.sessionChoices }
+    : {}),
+});
+
 const withoutDeletedSessionChoice = (
   state: ChatSessionState,
   deletedSessionId: string
@@ -1192,7 +1199,7 @@ export const handleChatInput = async ({
     if (filter.missingChoice) {
       return {
         state: appendAssistant(
-          withoutPanels(state),
+          withSessionChoicesOnly(state),
           "Session choice not found. Run /sessions first."
         ),
         exit: false,
@@ -1274,7 +1281,7 @@ export const handleChatInput = async ({
       return target.missingChoice
         ? {
             state: appendAssistant(
-              withoutPanels(state),
+              withSessionChoicesOnly(state),
               "Session choice not found. Run /sessions first, then use /session rename 1 <new-id>."
             ),
             exit: false,
@@ -1325,7 +1332,7 @@ export const handleChatInput = async ({
       return target.missingChoice
         ? {
             state: appendAssistant(
-              withoutPanels(state),
+              withSessionChoicesOnly(state),
               "Session choice not found. Run /sessions first, then use /session delete 1."
             ),
             exit: false,
@@ -1359,7 +1366,7 @@ export const handleChatInput = async ({
     if (target.missingChoice) {
       return {
         state: appendAssistant(
-          withoutPanels(state),
+          withSessionChoicesOnly(state),
           "Session choice not found. Run /sessions first, then use /session 1."
         ),
         exit: false,
