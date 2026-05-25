@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { WorkflowLocator } from "@obora/sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { listChatWorkflowLocators, resolveChatWorkflow } from "../../chat/workflow.js";
 import { startWorkflowWebBridge } from "../server.js";
 
 const writeWorkflow = (path: string, name: string): Promise<void> =>
@@ -200,6 +201,86 @@ describe("workflow web bridge", () => {
       });
       expect(saveResponse.status).toBe(200);
       expect(notFoundResponse.status).toBe(404);
+    });
+  });
+
+  it("makes builder saves immediately reusable by chat workflow discovery", async () => {
+    await withTempWorkflow(async ({ root, globalDir, locator }) => {
+      const bridgeLocator = await resolveChatWorkflow({
+        target: "release-readiness",
+        cwd: root,
+        projectRoot: root,
+        globalWorkflowDir: globalDir,
+        scope: "project",
+      });
+      const bridge = await startWorkflowWebBridge({
+        locator: bridgeLocator,
+        mode: "build",
+        open: false,
+        resolveRequest: {
+          cwd: root,
+          projectRoot: root,
+          globalWorkflowDir: globalDir,
+          scope: "all",
+        },
+      });
+      const detailPayload = await fetch(
+        `${bridge.apiBaseUrl}/api/workflows/${encodeURIComponent(bridgeLocator.id)}?token=${bridge.token}`
+      ).then((response) => response.json());
+      const saveResponse = await fetch(
+        `${bridge.apiBaseUrl}/api/workflows/${encodeURIComponent(bridgeLocator.id)}?token=${bridge.token}`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            revision: detailPayload.revision,
+            yaml: [
+              "name: release-readiness",
+              "version: '1.0'",
+              "description: Chat reusable after web save",
+              "steps:",
+              "  - name: prepare",
+              "    agent: worker",
+              "  - name: decide",
+              "    agent: reviewer",
+              "",
+            ].join("\n"),
+          }),
+        }
+      );
+      const chatLocators = await listChatWorkflowLocators({
+        cwd: root,
+        projectRoot: root,
+        globalWorkflowDir: globalDir,
+        scope: "project",
+      });
+      const resolved = await resolveChatWorkflow({
+        target: "release-readiness",
+        cwd: root,
+        projectRoot: root,
+        globalWorkflowDir: globalDir,
+        scope: "project",
+      });
+
+      await bridge.close();
+
+      expect(saveResponse.status).toBe(200);
+      expect(chatLocators).toEqual([
+        expect.objectContaining({
+          id: bridgeLocator.id,
+          name: "release-readiness",
+          description: "Chat reusable after web save",
+          stepCount: 2,
+          path: locator.path,
+        }),
+      ]);
+      expect(resolved).toMatchObject({
+        id: bridgeLocator.id,
+        name: "release-readiness",
+        description: "Chat reusable after web save",
+        stepCount: 2,
+        path: locator.path,
+      });
     });
   });
 
