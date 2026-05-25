@@ -764,6 +764,59 @@ describe("chat session", () => {
     expect(listed.state.messages.at(-1)?.content).toContain("exec-chat-1 · session-a");
   });
 
+  it("closes open run details when opening selection panels", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const detailed = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      lastRunSummary: runSummary,
+      inspectedRunSummary: runSummary,
+    };
+    const listSessions = vi.fn(async () => [
+      {
+        sessionId: "session-b",
+        status: "ready" as const,
+        cwd: "/repo",
+        projectRoot: "/repo",
+        tags: ["ops"],
+        workflowTarget: "release-readiness",
+        messageCount: 4,
+        updatedAt: "2026-05-22T00:00:00.000Z",
+      },
+    ]);
+    const listWorkflowLocators = vi.fn(async () => [locator]);
+
+    const runs = await handleChatInput({
+      input: "/runs",
+      state: detailed,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+    const sessions = await handleChatInput({
+      input: "/sessions",
+      state: detailed,
+      resolveWorkflow,
+      runWorkflow,
+      listSessions,
+      commandOptions: { dryRun: true },
+    });
+    const workflows = await handleChatInput({
+      input: "/workflows",
+      state: detailed,
+      resolveWorkflow,
+      runWorkflow,
+      listWorkflowLocators,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runs.state.inspectedRunSummary).toBeUndefined();
+    expect(runs.state.runChoices?.[0]?.runSummary.executionId).toBe("exec-chat-1");
+    expect(sessions.state.inspectedRunSummary).toBeUndefined();
+    expect(sessions.state.sessionChoices?.[0]?.sessionId).toBe("session-b");
+    expect(workflows.state.inspectedRunSummary).toBeUndefined();
+    expect(workflows.state.workflowChoices?.[0]?.name).toBe("release-readiness");
+  });
+
   it("opens persisted run details by execution id from chat", async () => {
     const runSummary = buildWorkflowRunSummary(executionResult);
     const findRun = vi.fn(async () => ({

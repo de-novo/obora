@@ -458,6 +458,7 @@ const withRunChoices = (
   runChoices: ReadonlyArray<ChatRunChoiceInput>
 ): ChatSessionState => ({
   ...state,
+  inspectedRunSummary: undefined,
   runChoices: runChoices.map((choice) => toChatRunChoice(choice, state.sessionId)),
   sessionChoices: undefined,
   workflowChoices: undefined,
@@ -479,6 +480,7 @@ const withSessionChoices = (
   sessionChoices: ReadonlyArray<ChatSessionSummary>
 ): ChatSessionState => ({
   ...state,
+  inspectedRunSummary: undefined,
   sessionChoices,
   runChoices: undefined,
   workflowChoices: undefined,
@@ -688,6 +690,7 @@ const withWorkflowChoices = (
   workflowChoices: ReadonlyArray<WorkflowLocator>
 ): ChatSessionState => ({
   ...state,
+  inspectedRunSummary: undefined,
   workflowChoices,
   runChoices: undefined,
   sessionChoices: undefined,
