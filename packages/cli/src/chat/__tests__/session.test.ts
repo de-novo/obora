@@ -1149,6 +1149,52 @@ describe("chat session", () => {
     expect(listed.state.messages.at(-1)?.content).toContain("Type 1 to open a run");
     expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
     expect(opened.state.messages.at(-1)?.content).toContain("Opened run details exec-chat-1.");
+    expect(opened.state.messages.at(-1)?.content).not.toContain("Use /session session-a");
+  });
+
+  it("retries a current-session run directly from the numbered run list", async () => {
+    const runWorkflowWithResult = vi.fn(async () => executionResult);
+    const selected = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: false,
+      }),
+      workflowLocator: locator,
+      status: "ready" as const,
+    };
+    const ran = await handleChatInput({
+      input: "perform the release check",
+      state: selected,
+      resolveWorkflow,
+      runWorkflow: runWorkflowWithResult,
+      commandOptions: { provider: "openrouter", model: "openrouter/owl-alpha" },
+    });
+    const listed = await handleChatInput({
+      input: "/runs",
+      state: ran.state,
+      resolveWorkflow,
+      runWorkflow: runWorkflowWithResult,
+      commandOptions: { provider: "openrouter", model: "openrouter/owl-alpha" },
+    });
+
+    vi.clearAllMocks();
+    const retried = await handleChatInput({
+      input: "/retry 1",
+      state: listed.state,
+      resolveWorkflow,
+      runWorkflow: runWorkflowWithResult,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflowWithResult).toHaveBeenCalledWith(
+      locator.path,
+      expect.objectContaining({
+        input: expect.stringContaining("perform the release check"),
+      })
+    );
+    expect(retried.state.lastRunTask).toBe("perform the release check");
+    expect(retried.state.lastRunWorkflowLocator).toBe(locator);
   });
 
   it("opens listed run details by typing the run number", async () => {

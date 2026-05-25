@@ -30,11 +30,15 @@ import {
 } from "./store.js";
 import type { ChatRunDetail, ChatSessionSummary } from "./store.js";
 import { ChatTuiController } from "./tui.js";
-import type { ChatCommandOptions, ChatRunChoice, ChatSessionState } from "./types.js";
+import type {
+  ChatCommandOptions,
+  ChatMessage,
+  ChatRunChoice,
+  ChatSessionState,
+} from "./types.js";
 import {
   chatRunChoiceFromDetail,
   chatRunChoicesFromDetails,
-  chatRunChoicesFromSummaries,
   runChoiceSummary,
   toChatRunChoice,
   type ChatRunChoiceInput,
@@ -353,21 +357,55 @@ const findRunChoiceInState = (
       }
     : undefined);
 
-const uniqueRunSummaries = (
-  summaries: ReadonlyArray<WorkflowRunSummary | undefined>
-): ReadonlyArray<WorkflowRunSummary> =>
-  summaries
-    .filter((summary): summary is WorkflowRunSummary => Boolean(summary))
-    .filter(
-      (summary, index, all) =>
-        all.findIndex((candidate) => candidate.executionId === summary.executionId) === index
-    );
+const runChoiceContextForSummary = (
+  state: ChatSessionState,
+  summary: WorkflowRunSummary
+): Pick<ChatRunChoice, "runTask" | "runWorkflowLocator"> =>
+  state.lastRunSummary?.executionId === summary.executionId
+    ? {
+        ...(state.lastRunTask ? { runTask: state.lastRunTask } : {}),
+        ...(state.lastRunWorkflowLocator
+          ? { runWorkflowLocator: state.lastRunWorkflowLocator }
+          : {}),
+      }
+    : {};
 
-const runSummariesFromState = (state: ChatSessionState): ReadonlyArray<WorkflowRunSummary> =>
-  uniqueRunSummaries([
-    state.lastRunSummary,
-    state.inspectedRunSummary,
-    ...state.messages.flatMap((message) => message.runSummary ?? []),
+const runChoiceFromMessage = (message: ChatMessage): ReadonlyArray<ChatRunChoice> =>
+  message.runSummary
+    ? [
+        {
+          runSummary: message.runSummary,
+          messageId: message.id,
+          source: "message",
+          ...(message.runTask ? { runTask: message.runTask } : {}),
+          ...(message.runWorkflowLocator
+            ? { runWorkflowLocator: message.runWorkflowLocator }
+            : {}),
+        },
+      ]
+    : [];
+
+const runChoicesFromState = (state: ChatSessionState): ReadonlyArray<ChatRunChoice> =>
+  uniqueRunChoices([
+    ...state.messages.flatMap(runChoiceFromMessage),
+    ...(state.lastRunSummary
+      ? [
+          {
+            runSummary: state.lastRunSummary,
+            source: "lastRunSummary",
+            ...runChoiceContextForSummary(state, state.lastRunSummary),
+          },
+        ]
+      : []),
+    ...(state.inspectedRunSummary
+      ? [
+          {
+            runSummary: state.inspectedRunSummary,
+            source: "inspectedRunSummary",
+            ...runChoiceContextForSummary(state, state.inspectedRunSummary),
+          },
+        ]
+      : []),
   ]).slice(0, 8);
 
 const runChoiceAt = (
@@ -1246,10 +1284,11 @@ export const handleChatInput = async ({
   }
 
   if (trimmed === "/runs") {
-    const summaries = runSummariesFromState(state);
+    const choices = runChoicesFromState(state);
+    const summaries = choices.map(runChoiceSummary);
     return {
       state: appendAssistant(
-        withRunChoices(state, chatRunChoicesFromSummaries(summaries, state.sessionId)),
+        withRunChoices(state, choices),
         formatRunListMessage(summaries)
       ),
       exit: false,
