@@ -214,8 +214,11 @@ const toChatSessionSummary = (record: ChatSessionRecord): ChatSessionSummary => 
   tags: record.state.tags ?? [],
   ...(record.state.workflowTarget ? { workflowTarget: record.state.workflowTarget } : {}),
   ...(record.state.lastRunTask ? { lastRunTask: record.state.lastRunTask } : {}),
-  ...(record.state.lastRunWorkflowLocator
-    ? { lastRunWorkflowName: record.state.lastRunWorkflowLocator.name }
+  ...(record.state.lastRunWorkflowLocator?.name ?? record.state.lastRunSummary?.workflowName
+    ? {
+        lastRunWorkflowName:
+          record.state.lastRunWorkflowLocator?.name ?? record.state.lastRunSummary?.workflowName,
+      }
     : {}),
   messageCount: record.state.messages.length,
   updatedAt: record.updatedAt,

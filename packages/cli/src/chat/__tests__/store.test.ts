@@ -87,9 +87,23 @@ describe("chat session store", () => {
       }),
       status: "completed" as const,
     };
+    const oldRun = {
+      ...createInitialChatState({
+        sessionId: "session-old-run",
+        cwd,
+        projectRoot: join(cwd, "project-c"),
+        dryRun: true,
+      }),
+      lastRunTask: "rerun old task",
+      lastRunSummary: {
+        ...runSummary,
+        workflowName: "legacy-flow",
+      },
+    };
 
     await saveChatSessionState({ cwd, state: first });
     await saveChatSessionState({ cwd, state: second });
+    await saveChatSessionState({ cwd, state: oldRun });
 
     const restored = await loadChatSessionState({ cwd, sessionId: "session-one" });
     const summaries = await listChatSessionSummaries({ cwd });
@@ -105,6 +119,7 @@ describe("chat session store", () => {
       },
     });
     expect(summaries.map((summary) => summary.sessionId).sort()).toEqual([
+      "session-old-run",
       "session-one",
       "session-two",
     ]);
@@ -115,6 +130,11 @@ describe("chat session store", () => {
       workflowTarget: "release-readiness",
       lastRunTask: "perform the release check",
       lastRunWorkflowName: "release-readiness",
+    });
+    expect(summaries.find((summary) => summary.sessionId === "session-old-run")).toMatchObject({
+      projectRoot: join(cwd, "project-c"),
+      lastRunTask: "rerun old task",
+      lastRunWorkflowName: "legacy-flow",
     });
     await expect(listChatSessionSummaries({ cwd, tag: "release" })).resolves.toEqual([
       expect.objectContaining({ sessionId: "session-one", tags: ["release", "urgent"] }),
