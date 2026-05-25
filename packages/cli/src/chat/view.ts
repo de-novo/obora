@@ -119,6 +119,9 @@ const roleBadge = (role: ChatMessage["role"]): string =>
 const formatRunDuration = (summary: WorkflowRunSummary): string =>
   summary.durationMs === undefined ? "duration -" : `duration ${summary.durationMs}ms`;
 
+const formatRunTaskPreview = (task: string | undefined): string =>
+  task ? fit(normalizeText(task), 46) : "-";
+
 const formatStepNames = (summary: WorkflowRunSummary): string =>
   summary.steps.map((step) => step.name).join(", ");
 
@@ -321,6 +324,7 @@ const renderRunHistoryMeta = (state: ChatSessionState, choice: ChatRunChoice): s
   const summary = runChoiceSummary(choice);
   return [
     renderRunHistorySource(state, choice),
+    `${muted("task")} ${formatRunTaskPreview(choice.runTask)}`,
     `${muted("retry")} ${choice.runTask && choice.runWorkflowLocator ? choice.runWorkflowLocator.name : "none"}`,
     `${muted("started")} ${formatUpdatedTime(summary.startedAt)}`,
     formatRunDuration(summary),
