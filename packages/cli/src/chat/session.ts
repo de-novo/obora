@@ -1012,11 +1012,13 @@ export const handleChatInput = async ({
               state:
                 target.sessionId === state.sessionId
                   ? appendAssistant(
-                      normalizeLoadedSessionState({
-                        current: state,
-                        loaded: renamed,
-                        commandOptions,
-                      }),
+                      withoutPanels(
+                        normalizeLoadedSessionState({
+                          current: state,
+                          loaded: renamed,
+                          commandOptions,
+                        })
+                      ),
                       `Renamed session ${target.sessionId} to ${renameCommand.nextSessionId}.`
                     )
                   : appendAssistant(

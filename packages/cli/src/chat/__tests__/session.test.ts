@@ -1953,6 +1953,7 @@ describe("chat session", () => {
   });
 
   it("renames the active chat session", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
     const renamed = createInitialChatState({
       sessionId: "renamed-session",
       cwd: "/repo/old",
@@ -1960,11 +1961,29 @@ describe("chat session", () => {
       dryRun: false,
     });
     const renameSession = vi.fn(async (_fromSessionId: string, _toSessionId: string) => renamed);
-    const state = createInitialChatState({
-      sessionId: "session-a",
-      cwd: "/repo",
-      dryRun: true,
-    });
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      workflowChoices: [locator],
+      showHelpPanel: true,
+    };
 
     const result = await handleChatInput({
       input: "/session rename session-a renamed-session",
@@ -1979,6 +1998,11 @@ describe("chat session", () => {
     expect(result.state.sessionId).toBe("renamed-session");
     expect(result.state.cwd).toBe("/repo");
     expect(result.state.dryRun).toBe(true);
+    expect(result.state.inspectedRunSummary).toBeUndefined();
+    expect(result.state.runChoices).toBeUndefined();
+    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.showHelpPanel).toBeUndefined();
     expect(result.state.messages.at(-1)?.content).toContain(
       "Renamed session session-a to renamed-session."
     );
