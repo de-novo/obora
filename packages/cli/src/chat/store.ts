@@ -361,6 +361,13 @@ const uniqueRunDetails = (
       ) === index
   );
 
+const sortRunDetailsByStartedAt = (
+  details: ReadonlyArray<ChatRunDetail>
+): ReadonlyArray<ChatRunDetail> =>
+  [...details].sort((left, right) =>
+    right.runSummary.startedAt.localeCompare(left.runSummary.startedAt)
+  );
+
 const chatRunDetailsFromState = (state: ChatSessionState): ReadonlyArray<ChatRunDetail> =>
   uniqueRunDetails([
     ...state.messages.flatMap((message) =>
@@ -434,16 +441,17 @@ export const listChatRunDetails = async ({
   sessionId
     ? loadChatSessionState({ cwd, sessionId, storeDir }).then((state) =>
         state && filterStateByProject(projectRoot)(state) && filterStateByTag(tag)(state)
-          ? chatRunDetailsFromState(state).filter(filterRunDetailByStatus(status))
+          ? sortRunDetailsByStartedAt(
+              chatRunDetailsFromState(state).filter(filterRunDetailByStatus(status))
+            )
           : []
       )
     : listChatSessionRecords(storeDir).then((records) =>
-        records
-          .filter(filterRecordByProject(projectRoot))
-          .filter(filterRecordByTag(tag))
-          .flatMap((record) => chatRunDetailsFromState(record.state))
-          .filter(filterRunDetailByStatus(status))
-          .sort((left, right) =>
-            right.runSummary.startedAt.localeCompare(left.runSummary.startedAt)
-          )
+        sortRunDetailsByStartedAt(
+          records
+            .filter(filterRecordByProject(projectRoot))
+            .filter(filterRecordByTag(tag))
+            .flatMap((record) => chatRunDetailsFromState(record.state))
+            .filter(filterRunDetailByStatus(status))
+        )
       );

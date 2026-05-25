@@ -364,6 +364,54 @@ describe("chat session store", () => {
     ]);
   });
 
+  it("sorts persisted run summaries by start time within a selected session", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "obora-chat-store-run-session-sort-"));
+    const olderRun = {
+      ...runSummary,
+      executionId: "exec-older",
+      startedAt: "2026-05-24T00:00:00.000Z",
+    };
+    const newerRun = {
+      ...runSummary,
+      executionId: "exec-newer",
+      startedAt: "2026-05-25T00:00:00.000Z",
+    };
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-sort",
+        cwd,
+        dryRun: false,
+      }),
+      messages: [
+        {
+          id: "assistant:older",
+          role: "assistant" as const,
+          content: olderRun.message,
+          createdAt: "2026-05-24T00:00:01.000Z",
+          runSummary: olderRun,
+        },
+        {
+          id: "assistant:newer",
+          role: "assistant" as const,
+          content: newerRun.message,
+          createdAt: "2026-05-25T00:00:01.000Z",
+          runSummary: newerRun,
+        },
+      ],
+    };
+
+    await saveChatSessionState({ cwd, state });
+
+    await expect(listChatRunDetails({ cwd, sessionId: "session-sort" })).resolves.toEqual([
+      expect.objectContaining({
+        runSummary: expect.objectContaining({ executionId: "exec-newer" }),
+      }),
+      expect.objectContaining({
+        runSummary: expect.objectContaining({ executionId: "exec-older" }),
+      }),
+    ]);
+  });
+
   it("groups chat session summaries by project, tag, or day", () => {
     const summaries = [
       {
