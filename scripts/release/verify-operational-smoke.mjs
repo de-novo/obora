@@ -194,6 +194,95 @@ const verifyCliChatOnceSmoke = async (tmpDir) => {
   console.log('[PASS] Built CLI chat once smoke passed.');
 };
 
+const verifyCliChatRunHistorySmoke = async (tmpDir) => {
+  const homeDir = join(tmpDir, 'chat-run-home');
+  await mkdir(homeDir, { recursive: true });
+  const env = createSmokeEnv(homeDir);
+  const projectDir = join(tmpDir, 'chat-run-project');
+  const sessionId = 'smoke-chat-run-session';
+  const chatTask = 'Record this live chat run and keep it retryable';
+  const workflowPath = join(projectDir, 'workflow.yaml');
+
+  await mkdir(projectDir, { recursive: true });
+  await writeFile(
+    workflowPath,
+    [
+      'name: smoke-chat-run-workflow',
+      'version: "1.0"',
+      'steps: []',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const finalState = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat live --once --json',
+    args: ['--json', 'chat', 'workflow.yaml', '--session', sessionId, '--once', chatTask],
+  });
+  const executionId = finalState.lastRunSummary?.executionId;
+  assert(finalState.dryRun === false, 'live chat smoke must not run in dry-run mode');
+  assert(finalState.lastRunSummary?.status === 'completed', 'live chat smoke must complete a run');
+  assert(executionId, 'live chat smoke must persist a run execution id');
+  assert(
+    finalState.lastRunTask === chatTask,
+    'live chat smoke must preserve the chat task as retry input',
+  );
+
+  const runs = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --list-runs --json after live run',
+    args: ['--json', 'chat', '--list-runs', '--session', sessionId],
+  });
+  assert(Array.isArray(runs), 'chat run list must return an array');
+  assert(
+    runs.some(
+      (detail) =>
+        detail.runSummary?.executionId === executionId &&
+        detail.runSummary?.status === 'completed' &&
+        detail.runTask === chatTask,
+    ),
+    'chat run list must include the saved live run and task',
+  );
+
+  const detail = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --show-run --json after live run',
+    args: ['--json', 'chat', '--show-run', executionId, '--session', sessionId],
+  });
+  assert(detail.sessionId === sessionId, 'show-run must load the run from the requested session');
+  assert(detail.runSummary?.executionId === executionId, 'show-run must return the requested run');
+  assert(detail.runTask === chatTask, 'show-run must preserve the original chat task');
+  assert(
+    detail.runWorkflowLocator?.name === 'smoke-chat-run-workflow',
+    'show-run must preserve the retry workflow locator',
+  );
+
+  const retryState = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat /retry --json after live run',
+    args: ['--json', 'chat', '--session', sessionId, '--once', `/retry ${executionId}`],
+  });
+  assert(retryState.lastRunSummary?.status === 'completed', 'chat retry must complete a new run');
+  assert(
+    retryState.lastRunSummary?.executionId !== executionId,
+    'chat retry must create a new execution id',
+  );
+  assert(retryState.lastRunTask === chatTask, 'chat retry must reuse the original task');
+  assert(
+    retryState.messages?.some?.(
+      (message) => message.role === 'user' && message.content === chatTask,
+    ) === true,
+    'chat retry must append the retried task as a user message',
+  );
+
+  console.log('[PASS] Built CLI chat run history smoke passed.');
+};
+
 const withIsolatedDashboardEnv = async (fn) => {
   const keys = ['OBORA_HISTORY_DB_PATH', 'OBORA_RESUME_COMMAND', 'OBORA_DLQ_PATH'];
   const original = new Map(keys.map((key) => [key, process.env[key]]));
@@ -261,6 +350,7 @@ const main = async () => {
   try {
     await verifyCliOnboardingSmoke(tmpDir);
     await verifyCliChatOnceSmoke(tmpDir);
+    await verifyCliChatRunHistorySmoke(tmpDir);
     await verifyDashboardBootstrapSmoke(tmpDir);
     console.log('[PASS] Operational smoke completed successfully.');
   } finally {
