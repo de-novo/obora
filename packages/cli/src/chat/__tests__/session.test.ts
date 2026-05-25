@@ -1276,10 +1276,50 @@ describe("chat session", () => {
     );
     expect(listed.state.messages.at(-1)?.content).toContain("exec-chat-1 · session-a");
     expect(listed.state.messages.at(-1)?.content).toContain("exec-chat-old · session-b");
+    expect(listed.state.messages.at(-1)?.content).toContain("task perform the release check");
+    expect(listed.state.messages.at(-1)?.content).toContain("task rerun from old metadata");
     expect(listed.state.messages.at(-1)?.content).toContain("retry release-readiness");
     expect(listed.state.messages.at(-1)?.content).toContain(
       "Use /retry 1 to rerun directly, or /details 1 to inspect first."
     );
+  });
+
+  it("truncates long persisted run task text in chat run lists", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const listRuns = vi.fn(async () => [
+      {
+        sessionId: "session-a",
+        messageId: "assistant:run",
+        messageCreatedAt: "2026-05-21T00:00:02.000Z",
+        runTask:
+          "prepare release notes, update changelog, run checks, and hand off to operations",
+        runSummary,
+      },
+      {
+        sessionId: "session-b",
+        messageId: "assistant:no-task",
+        messageCreatedAt: "2026-05-20T00:00:02.000Z",
+        runSummary: {
+          ...runSummary,
+          executionId: "exec-chat-no-task",
+        },
+      },
+    ]);
+    const state = createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true });
+
+    const listed = await handleChatInput({
+      input: "/runs --all",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      listRuns,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(listed.state.messages.at(-1)?.content).toContain(
+      "task prepare release notes, update changelog, run ch…"
+    );
+    expect(listed.state.messages.at(-1)?.content).toContain("task -");
   });
 
   it("closes open run details when opening selection panels", async () => {

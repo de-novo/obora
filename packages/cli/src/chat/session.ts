@@ -472,12 +472,16 @@ const persistedRunScopeText = (filter: RunListFilter): string =>
     .filter((part): part is string => Boolean(part))
     .join(", ");
 
+const formatRunTaskText = (task: string | undefined): string =>
+  task ? `task ${task.length > 48 ? `${task.slice(0, 47)}…` : task}` : "task -";
+
 const formatPersistedRunSummaryLine = (detail: ChatRunDetail, index: number): string =>
   [
     `${index + 1}. ${detail.runSummary.executionId}`,
     detail.sessionId,
     detail.runSummary.workflowName,
     detail.runSummary.status,
+    formatRunTaskText(detail.runTask),
     detail.runTask
       ? `retry ${detail.runWorkflowLocator?.name ?? detail.runSummary.workflowName}`
       : "no retry",
