@@ -1092,7 +1092,7 @@ export const handleChatInput = async ({
           exit: false,
         }
       : {
-          state: appendAssistant(state, `Chat session not found: ${targetSessionId}`),
+          state: appendAssistant(withoutPanels(state), `Chat session not found: ${targetSessionId}`),
           exit: false,
         };
   }
