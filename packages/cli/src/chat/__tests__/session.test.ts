@@ -694,6 +694,43 @@ describe("chat session", () => {
     );
   });
 
+  it("opens the visible listed run before the previous latest run", async () => {
+    const latestSummary = buildWorkflowRunSummary(executionResult);
+    const listedSummary = {
+      ...latestSummary,
+      executionId: "exec-visible-1",
+      workflowName: "code-review",
+    };
+    const listedState = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      lastRunSummary: latestSummary,
+      runChoices: [
+        {
+          runSummary: listedSummary,
+          sessionId: "history-session",
+          messageId: "assistant:run",
+          source: "persisted",
+        },
+      ],
+    };
+
+    const opened = await handleChatInput({
+      input: "/details",
+      state: listedState,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(opened.state.inspectedRunSummary).toMatchObject({
+      executionId: "exec-visible-1",
+      workflowName: "code-review",
+    });
+    expect(opened.state.messages.at(-1)?.content).toContain(
+      "Use /session history-session to switch to the source session."
+    );
+  });
+
   it("lists persisted runs across sessions from chat", async () => {
     const runSummary = buildWorkflowRunSummary(executionResult);
     const listRuns = vi.fn(async () => [
