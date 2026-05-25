@@ -142,10 +142,13 @@ const commandParts = (input: string): ReadonlyArray<string> =>
 const sessionListFilterFromCommand = (
   input: string,
   state: ChatSessionState
-): SessionListFilter => {
+): SessionListFilter | undefined => {
   const target = sessionsTagFromCommand(input);
   const parts = commandParts(input);
-  return parts[1] === "--project"
+  const unknownOption = parts[1]?.startsWith("--") && parts[1] !== "--project";
+  return unknownOption
+    ? undefined
+    : parts[1] === "--project"
     ? {
         projectRoot: parts[2] ? resolveProjectRootTarget(state, parts[2]) : state.projectRoot ?? state.cwd,
       }
@@ -1185,6 +1188,15 @@ export const handleChatInput = async ({
 
   if (trimmed === "/sessions" || trimmed.startsWith("/sessions ")) {
     const filter = sessionListFilterFromCommand(trimmed, state);
+    if (!filter) {
+      return {
+        state: appendAssistant(
+          withoutPanels(state),
+          "Usage: /sessions, /sessions here, /sessions <tag>, or /sessions --project [path]."
+        ),
+        exit: false,
+      };
+    }
     return (listSessions
       ? listSessions(filter.tag, filter.projectRoot)
       : listChatSessionSummaries({

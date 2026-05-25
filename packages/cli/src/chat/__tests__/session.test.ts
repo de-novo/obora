@@ -2682,6 +2682,44 @@ describe("chat session", () => {
     );
   });
 
+  it("reports invalid session list options", async () => {
+    const listSessions = vi.fn(async () => []);
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          tags: ["release"],
+          messageCount: 2,
+          updatedAt: "2026-05-24T00:00:00.000Z",
+        },
+      ],
+      showHelpPanel: true,
+    };
+
+    const result = await handleChatInput({
+      input: "/sessions --unknown",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      listSessions,
+    });
+
+    expect(listSessions).not.toHaveBeenCalled();
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Usage: /sessions, /sessions here, /sessions <tag>, or /sessions --project [path]."
+    );
+    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.showHelpPanel).toBeUndefined();
+  });
+
   it("renames the active chat session", async () => {
     const runSummary = buildWorkflowRunSummary(executionResult);
     const renamed = createInitialChatState({
