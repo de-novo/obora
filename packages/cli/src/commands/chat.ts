@@ -138,6 +138,7 @@ export function createChatCommand(): Command {
                 runs.map((detail) => ({
                   sessionId: detail.sessionId,
                   executionId: detail.runSummary.executionId,
+                  project: detail.projectRoot ?? "-",
                   workflowName: detail.runSummary.workflowName,
                   status: detail.runSummary.status,
                   task: detail.runTask ?? "-",

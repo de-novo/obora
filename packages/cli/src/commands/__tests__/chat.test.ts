@@ -375,6 +375,7 @@ describe("chat command", () => {
     vi.mocked(listChatRunDetails).mockResolvedValue([
       {
         sessionId: "session-a",
+        projectRoot: "/repo/source-project",
         messageId: "assistant:run",
         messageCreatedAt: "2026-05-24T00:00:01.000Z",
         workflowTarget: "release-readiness",
@@ -411,6 +412,7 @@ describe("chat command", () => {
       },
       {
         sessionId: "session-a",
+        projectRoot: "/repo/legacy-project",
         messageId: "assistant:old-run",
         messageCreatedAt: "2026-05-24T00:00:02.000Z",
         runTask: "rerun old task",
@@ -454,6 +456,7 @@ describe("chat command", () => {
       expect.objectContaining({
         sessionId: "session-a",
         executionId: "exec-123",
+        project: "/repo/source-project",
         workflowName: "release-readiness",
         task: "prepare release",
         retry: "release-readiness",
@@ -461,12 +464,14 @@ describe("chat command", () => {
       }),
       expect.objectContaining({
         executionId: "exec-old",
+        project: "/repo/legacy-project",
         task: "rerun old task",
         retry: "legacy-flow",
         options: "default",
       }),
       expect.objectContaining({
         executionId: "exec-no-task",
+        project: "-",
         task: "-",
         retry: "-",
         options: "default",
