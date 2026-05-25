@@ -502,6 +502,19 @@ const withSessionChoices = (
   showHelpPanel: undefined,
 });
 
+const withInspectedRunSummary = (
+  state: ChatSessionState,
+  summary: WorkflowRunSummary,
+  runChoices: ReadonlyArray<ChatRunChoice> | undefined = state.runChoices
+): ChatSessionState => ({
+  ...state,
+  inspectedRunSummary: summary,
+  runChoices,
+  sessionChoices: undefined,
+  workflowChoices: undefined,
+  showHelpPanel: undefined,
+});
+
 const sessionChoiceIndexFromTarget = (target: string): number | undefined =>
   /^\d+$/u.test(target) ? Number.parseInt(target, 10) - 1 : undefined;
 
@@ -1165,7 +1178,7 @@ export const handleChatInput = async ({
     return summary
       ? {
           state: appendAssistant(
-            { ...state, inspectedRunSummary: summary },
+            withInspectedRunSummary(state, summary),
             openedRunDetailsMessage(summary, choice, undefined)
           ),
           exit: false,
@@ -1197,7 +1210,7 @@ export const handleChatInput = async ({
       : (state.runChoices ?? []);
     return {
       state: appendAssistant(
-        summary ? { ...state, inspectedRunSummary: summary, runChoices } : state,
+        summary ? withInspectedRunSummary(state, summary, runChoices) : state,
         summary
           ? openedRunDetailsMessage(summary, choice, persistedDetail)
           : `Run details not found: ${detailsExecutionId}`

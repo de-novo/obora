@@ -714,6 +714,43 @@ describe("chat session", () => {
     expect(opened.state.messages.at(-1)?.content).toContain("Opened run details exec-chat-1.");
   });
 
+  it("opens run details as the active panel", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const listedState = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      workflowChoices: [locator],
+      showHelpPanel: true,
+    };
+
+    const opened = await handleChatInput({
+      input: "1",
+      state: listedState,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
+    expect(opened.state.runChoices?.[0]?.runSummary.executionId).toBe("exec-chat-1");
+    expect(opened.state.sessionChoices).toBeUndefined();
+    expect(opened.state.workflowChoices).toBeUndefined();
+    expect(opened.state.showHelpPanel).toBeUndefined();
+    expect(opened.state.messages.at(-1)?.content).toContain("Opened run details exec-chat-1.");
+  });
+
   it("opens the first listed run with a short details command", async () => {
     const runSummary = buildWorkflowRunSummary(executionResult);
     const listedState = {
