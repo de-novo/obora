@@ -148,6 +148,57 @@ describe("workflow web bridge", () => {
     });
   });
 
+  it("serves and persists discovered workflows by locator id", async () => {
+    await withTempWorkflow(async ({ root, globalDir, locator }) => {
+      const bridge = await startWorkflowWebBridge({
+        locator,
+        mode: "build",
+        open: false,
+        resolveRequest: {
+          cwd: root,
+          projectRoot: root,
+          globalWorkflowDir: globalDir,
+          scope: "all",
+        },
+      });
+      const listPayload = await fetch(
+        `${bridge.apiBaseUrl}/api/workflows?scope=all&token=${bridge.token}`
+      ).then((response) => response.json());
+      const globalLocator = listPayload.global.find(
+        (entry: WorkflowLocator) => entry.name === "code-review"
+      ) as WorkflowLocator | undefined;
+      const detailResponse = await fetch(
+        `${bridge.apiBaseUrl}/api/workflows/${encodeURIComponent(globalLocator?.id ?? "")}?token=${bridge.token}`
+      );
+      const detailPayload = await detailResponse.json();
+      const saveResponse = await fetch(
+        `${bridge.apiBaseUrl}/api/workflows/${encodeURIComponent(globalLocator?.id ?? "")}?token=${bridge.token}`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            revision: detailPayload.revision,
+            yaml: "name: code-review\nversion: '1.0'\nsteps:\n  - name: saved-global\n    agent: reviewer\n",
+          }),
+        }
+      );
+      const notFoundResponse = await fetch(
+        `${bridge.apiBaseUrl}/api/workflows/${encodeURIComponent("global:missing")}?token=${bridge.token}`
+      );
+
+      await bridge.close();
+
+      expect(detailResponse.status).toBe(200);
+      expect(detailPayload).toMatchObject({
+        locator: { name: "code-review", scope: "global" },
+        workflow: { name: "code-review" },
+        revision: expect.any(String),
+      });
+      expect(saveResponse.status).toBe(200);
+      expect(notFoundResponse.status).toBe(404);
+    });
+  });
+
   it("persists raw YAML saves and rejects unsupported API methods", async () => {
     await withTempWorkflow(async ({ path, locator }) => {
       const bridge = await startWorkflowWebBridge({ locator, mode: "build", open: false });

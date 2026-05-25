@@ -5,7 +5,12 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import { discoverWorkflowLocators, readWorkflow, resolveWorkflowTarget } from "@obora/sdk";
-import type { WorkflowResolveIntent, WorkflowResolveRequest, WorkflowResolveScope } from "@obora/sdk";
+import type {
+  WorkflowLocator,
+  WorkflowResolveIntent,
+  WorkflowResolveRequest,
+  WorkflowResolveScope,
+} from "@obora/sdk";
 
 import { renderWorkflowWebHtml } from "./html.js";
 import type { WorkflowWebBridgeHandle, WorkflowWebBridgeOptions } from "./types.js";
@@ -165,6 +170,20 @@ const handleWorkflowListRequest = async (
   sendJson(response, 200, discovery);
 };
 
+const locatorFromApiPath = async (
+  pathname: string,
+  options: WorkflowWebBridgeOptions
+): Promise<WorkflowLocator | undefined> => {
+  const prefix = "/api/workflows/";
+  const encodedId = pathname.startsWith(prefix) ? pathname.slice(prefix.length) : "";
+  const locatorId = decodeURIComponent(encodedId);
+  const discovery = await discoverWorkflowLocators({
+    ...baseResolveRequest(options),
+    scope: "all",
+  });
+  return discovery.all.find((locator) => locator.id === locatorId);
+};
+
 const handleWorkflowResolveRequest = async (
   request: IncomingMessage,
   response: ServerResponse,
@@ -182,6 +201,39 @@ const handleWorkflowResolveRequest = async (
   );
 };
 
+const saveWorkflowRequest = async (
+  request: IncomingMessage,
+  response: ServerResponse,
+  options: WorkflowWebBridgeOptions
+): Promise<void> => {
+  if (!locatorCanPersist(options)) {
+    sendError(response, 403, "Workflow is read-only in this web session.");
+    return;
+  }
+
+  const body = await parseBodyAsRecord(request);
+  const revision = typeof body.revision === "string" ? body.revision : undefined;
+  const currentRevision = await workflowRevision(options.locator.path);
+  if (!revision) {
+    sendError(response, 409, "Workflow revision is required before saving.");
+    return;
+  }
+  if (revision !== currentRevision) {
+    sendError(response, 409, "Workflow changed on disk. Reload before saving.");
+    return;
+  }
+
+  const nextYaml = yamlFromSaveBody(body);
+  const validationError = validateWorkflowYamlForSave(nextYaml);
+  if (validationError) {
+    sendError(response, 422, validationError);
+    return;
+  }
+
+  await writeFile(options.locator.path, nextYaml, "utf-8");
+  sendJson(response, 200, await responseForWorkflow(options));
+};
+
 const handleApiRequest = async (
   request: IncomingMessage,
   response: ServerResponse,
@@ -193,36 +245,26 @@ const handleApiRequest = async (
   }
 
   if (request.method === "PUT") {
-    if (!locatorCanPersist(options)) {
-      sendError(response, 403, "Workflow is read-only in this web session.");
-      return;
-    }
-
-    const body = await parseBodyAsRecord(request);
-    const revision = typeof body.revision === "string" ? body.revision : undefined;
-    const currentRevision = await workflowRevision(options.locator.path);
-    if (!revision) {
-      sendError(response, 409, "Workflow revision is required before saving.");
-      return;
-    }
-    if (revision !== currentRevision) {
-      sendError(response, 409, "Workflow changed on disk. Reload before saving.");
-      return;
-    }
-
-    const nextYaml = yamlFromSaveBody(body);
-    const validationError = validateWorkflowYamlForSave(nextYaml);
-    if (validationError) {
-      sendError(response, 422, validationError);
-      return;
-    }
-
-    await writeFile(options.locator.path, nextYaml, "utf-8");
-    sendJson(response, 200, await responseForWorkflow(options));
+    await saveWorkflowRequest(request, response, options);
     return;
   }
 
   sendError(response, 405, "Method not allowed.");
+};
+
+const handleWorkflowByIdRequest = async (
+  request: IncomingMessage,
+  response: ServerResponse,
+  options: WorkflowWebBridgeOptions,
+  pathname: string
+): Promise<void> => {
+  const locator = await locatorFromApiPath(pathname, options);
+  if (!locator) {
+    sendError(response, 404, "Workflow locator not found.");
+    return;
+  }
+
+  await handleApiRequest(request, response, { ...options, locator });
 };
 
 const createWorkflowRequestHandler =
@@ -232,7 +274,8 @@ const createWorkflowRequestHandler =
     const isApi =
       url.pathname === "/api/workflow" ||
       url.pathname === "/api/workflows" ||
-      url.pathname === "/api/workflows/resolve";
+      url.pathname === "/api/workflows/resolve" ||
+      url.pathname.startsWith("/api/workflows/");
     const authorized = url.searchParams.get("token") === token;
 
     try {
@@ -253,6 +296,11 @@ const createWorkflowRequestHandler =
 
       if (url.pathname === "/api/workflows/resolve") {
         await handleWorkflowResolveRequest(request, response, options);
+        return;
+      }
+
+      if (url.pathname.startsWith("/api/workflows/")) {
+        await handleWorkflowByIdRequest(request, response, options, url.pathname);
         return;
       }
 
