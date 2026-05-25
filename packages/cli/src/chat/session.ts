@@ -483,6 +483,11 @@ const withSessionTags = (
 ): ChatSessionState => ({
   ...state,
   tags,
+  inspectedRunSummary: undefined,
+  runChoices: undefined,
+  sessionChoices: undefined,
+  workflowChoices: undefined,
+  showHelpPanel: undefined,
 });
 
 const withSessionChoices = (

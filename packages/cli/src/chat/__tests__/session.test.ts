@@ -1270,6 +1270,7 @@ describe("chat session", () => {
 
   it("shows and updates session tags without requiring workflow selection", async () => {
     vi.clearAllMocks();
+    const runSummary = buildWorkflowRunSummary(executionResult);
     const state = createInitialChatState({
       sessionId: "session-a",
       cwd: "/repo",
@@ -1286,7 +1287,32 @@ describe("chat session", () => {
     });
     const updated = await handleChatInput({
       input: "/tags release, qa",
-      state: shown.state,
+      state: {
+        ...shown.state,
+        inspectedRunSummary: runSummary,
+        runChoices: [
+          {
+            runSummary,
+            sessionId: "session-a",
+            messageId: "assistant:run",
+            source: "persisted",
+          },
+        ],
+        sessionChoices: [
+          {
+            sessionId: "session-b",
+            status: "ready" as const,
+            cwd: "/repo",
+            projectRoot: "/repo",
+            tags: ["triage"],
+            workflowTarget: "release-readiness",
+            messageCount: 4,
+            updatedAt: "2026-05-22T00:00:00.000Z",
+          },
+        ],
+        workflowChoices: [locator],
+        showHelpPanel: true,
+      },
       resolveWorkflow,
       runWorkflow,
       commandOptions: { dryRun: true },
@@ -1302,6 +1328,11 @@ describe("chat session", () => {
     expect(runWorkflow).not.toHaveBeenCalled();
     expect(shown.state.messages.at(-1)?.content).toContain("Session tags: triage");
     expect(updated.state.tags).toEqual(["release", "qa"]);
+    expect(updated.state.inspectedRunSummary).toBeUndefined();
+    expect(updated.state.runChoices).toBeUndefined();
+    expect(updated.state.sessionChoices).toBeUndefined();
+    expect(updated.state.workflowChoices).toBeUndefined();
+    expect(updated.state.showHelpPanel).toBeUndefined();
     expect(updated.state.messages.at(-1)?.content).toContain("Session tags updated: release, qa");
     expect(cleared.state.tags).toEqual([]);
     expect(cleared.state.messages.at(-1)?.content).toContain("Session tags updated: none");
