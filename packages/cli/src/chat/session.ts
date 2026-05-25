@@ -903,7 +903,7 @@ export const handleChatInput = async ({
   if (trimmed === "/run") {
     return {
       state: appendAssistant(
-        state,
+        withoutPanels(state),
         "Usage: /run <task>. You can also use /run #1 <task> after /workflows, or /run --workflow <name-or-path> <task>."
       ),
       exit: false,
@@ -926,7 +926,7 @@ export const handleChatInput = async ({
     if (!filter) {
       return {
         state: appendAssistant(
-          state,
+          withoutPanels(state),
           "Usage: /runs, /runs --all, /runs --session <id-or-number>, /runs --project [path], /runs --tag <tag>, or /runs --status <status>."
         ),
         exit: false,
@@ -934,7 +934,10 @@ export const handleChatInput = async ({
     }
     if (filter.missingChoice) {
       return {
-        state: appendAssistant(state, "Session choice not found. Run /sessions first."),
+        state: appendAssistant(
+          withoutPanels(state),
+          "Session choice not found. Run /sessions first."
+        ),
         exit: false,
       };
     }

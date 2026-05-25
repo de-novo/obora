@@ -1161,7 +1161,26 @@ describe("chat session", () => {
   });
 
   it("reports invalid and missing persisted run list selectors", async () => {
-    const state = createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true });
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const state = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      workflowChoices: [locator],
+      showHelpPanel: true,
+    };
     const invalid = await handleChatInput({
       input: "/runs --unknown",
       state,
@@ -1194,11 +1213,21 @@ describe("chat session", () => {
     expect(invalid.state.messages.at(-1)?.content).toContain(
       "Usage: /runs, /runs --all, /runs --session <id-or-number>, /runs --project [path], /runs --tag <tag>, or /runs --status <status>."
     );
+    expect(invalid.state.inspectedRunSummary).toBeUndefined();
+    expect(invalid.state.runChoices).toBeUndefined();
+    expect(invalid.state.sessionChoices).toBeUndefined();
+    expect(invalid.state.workflowChoices).toBeUndefined();
+    expect(invalid.state.showHelpPanel).toBeUndefined();
     expect(missingTag.state.messages.at(-1)?.content).toContain("Usage: /runs");
     expect(missingStatus.state.messages.at(-1)?.content).toContain("Usage: /runs");
     expect(missingChoice.state.messages.at(-1)?.content).toContain(
       "Session choice not found. Run /sessions first."
     );
+    expect(missingChoice.state.inspectedRunSummary).toBeUndefined();
+    expect(missingChoice.state.runChoices).toBeUndefined();
+    expect(missingChoice.state.sessionChoices).toBeUndefined();
+    expect(missingChoice.state.workflowChoices).toBeUndefined();
+    expect(missingChoice.state.showHelpPanel).toBeUndefined();
   });
 
   it("passes persisted run filters to injected run listing callbacks", async () => {
@@ -2668,6 +2697,7 @@ describe("chat session", () => {
 
   it("does not run empty /run commands", async () => {
     vi.clearAllMocks();
+    const runSummary = buildWorkflowRunSummary(executionResult);
     const selected = {
       ...createInitialChatState({
         sessionId: "session-a",
@@ -2675,6 +2705,22 @@ describe("chat session", () => {
         dryRun: true,
       }),
       workflowLocator: locator,
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      workflowChoices: [locator],
+      showHelpPanel: true,
       status: "ready" as const,
     };
 
@@ -2687,6 +2733,11 @@ describe("chat session", () => {
     });
 
     expect(runWorkflow).not.toHaveBeenCalled();
+    expect(result.state.inspectedRunSummary).toBeUndefined();
+    expect(result.state.runChoices).toBeUndefined();
+    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.showHelpPanel).toBeUndefined();
     expect(result.state.messages.at(-1)?.content).toContain("Usage: /run <task>");
   });
 
