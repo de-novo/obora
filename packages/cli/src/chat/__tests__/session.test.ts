@@ -2009,8 +2009,12 @@ describe("chat session", () => {
             runSummary: newerRun,
           },
         ],
+        lastRunTask: "rerun newest persisted task",
+        lastRunWorkflowLocator: locator,
+        lastRunSummary: newerRun,
       },
     });
+    const runWorkflowWithResult = vi.fn(async () => executionResult);
     const state = createInitialChatState({
       sessionId: "session-a",
       cwd,
@@ -2021,14 +2025,21 @@ describe("chat session", () => {
       input: "/runs --session session-sort",
       state,
       resolveWorkflow,
-      runWorkflow,
+      runWorkflow: runWorkflowWithResult,
       commandOptions: { dryRun: true },
     });
     const opened = await handleChatInput({
       input: "/details 1",
       state: listed.state,
       resolveWorkflow,
-      runWorkflow,
+      runWorkflow: runWorkflowWithResult,
+      commandOptions: { dryRun: true },
+    });
+    const retried = await handleChatInput({
+      input: "/retry 1",
+      state: listed.state,
+      resolveWorkflow,
+      runWorkflow: runWorkflowWithResult,
       commandOptions: { dryRun: true },
     });
 
@@ -2037,6 +2048,13 @@ describe("chat session", () => {
       "exec-older",
     ]);
     expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-newer");
+    expect(runWorkflowWithResult).toHaveBeenCalledWith(
+      locator.path,
+      expect.objectContaining({
+        input: expect.stringContaining("rerun newest persisted task"),
+      })
+    );
+    expect(retried.state.lastRunTask).toBe("rerun newest persisted task");
   });
 
   it("reports missing run details without requiring a workflow selection", async () => {
