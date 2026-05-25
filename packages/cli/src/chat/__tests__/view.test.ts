@@ -570,6 +570,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("error Provider returned error");
     expect(plain).toContain("attention #1 collect missing");
     expect(plain).toContain("cause Provider returned error");
+    expect(plain).toContain("hint No output recorded.");
     expect(plain).toContain("#1 collect missing");
     expect(plain).toContain("issues Provider returned error");
   });

@@ -242,6 +242,7 @@ const runDetailAttentionLines = (summary: WorkflowRunSummary): ReadonlyArray<str
     ...(stepValues(step.issues).length > 0
       ? [`${muted("cause")} ${stepValues(step.issues).join("; ")}`]
       : []),
+    `${muted("hint")} ${step.outputPreview}`,
   ]);
 
 const runDetailStepLines = (
