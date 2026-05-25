@@ -314,7 +314,7 @@ describe("renderChatView", () => {
     const plain = stripAnsi(output);
 
     expect(plain).toContain("session current");
-    expect(plain).toContain("/details  1  /details <runId>");
+    expect(plain).toContain("/details 1  /retry 1  /details <runId>");
     expect(plain).toContain("/runs --tag <tag>");
     expect(plain).not.toContain("switch /session");
   });

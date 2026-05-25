@@ -107,7 +107,7 @@ describe("chat command metadata", () => {
         runChoices: [{ runSummary, sessionId: "session-a" }],
       })
     ).toEqual([
-      "/details  1  /details <runId>",
+      "/details 1  /retry 1  /details <runId>",
       "/runs --project  /runs --tag <tag>  /runs failed",
     ]);
     expect(

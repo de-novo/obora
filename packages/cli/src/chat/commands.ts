@@ -193,7 +193,7 @@ export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<st
   }
   if (state.runChoices && state.runChoices.length > 0) {
     return [
-      "/details  1  /details <runId>",
+      "/details 1  /retry 1  /details <runId>",
       "/runs --project  /runs --tag <tag>  /runs failed",
     ];
   }
