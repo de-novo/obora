@@ -702,6 +702,8 @@ const withResolvedWorkflow = (
   workflowTarget,
   workflowLocator,
   workflowChoices: undefined,
+  inspectedRunSummary: undefined,
+  runChoices: undefined,
   status: "ready",
   lastError: undefined,
 });

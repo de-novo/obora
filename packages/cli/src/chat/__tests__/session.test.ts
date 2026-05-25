@@ -2068,6 +2068,7 @@ describe("chat session", () => {
   });
 
   it("selects a workflow by number from the latest workflow list", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
     const listed = {
       ...createInitialChatState({
         sessionId: "session-a",
@@ -2075,6 +2076,15 @@ describe("chat session", () => {
         dryRun: true,
       }),
       workflowChoices: [locator, codeReviewLocator],
+      inspectedRunSummary: runSummary,
+      runChoices: [
+        {
+          runSummary,
+          sessionId: "session-a",
+          messageId: "assistant:run",
+          source: "persisted",
+        },
+      ],
     };
 
     const result = await handleChatInput({
@@ -2089,6 +2099,8 @@ describe("chat session", () => {
     expect(result.state.workflowTarget).toBe("code-review");
     expect(result.state.workflowLocator).toBe(codeReviewLocator);
     expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.inspectedRunSummary).toBeUndefined();
+    expect(result.state.runChoices).toBeUndefined();
     expect(result.state.messages.at(-1)?.content).toContain("Selected workflow code-review");
   });
 
