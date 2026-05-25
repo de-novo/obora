@@ -1856,6 +1856,46 @@ describe("chat session", () => {
     );
   });
 
+  it("retries opened persisted metadata from its source project", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const findRun = vi.fn(async () => ({
+      sessionId: "source-session",
+      projectRoot: "/repo/source-project",
+      messageId: "assistant:run",
+      messageCreatedAt: "2026-05-21T00:00:02.000Z",
+      runTask: "perform the release check",
+      runSummary,
+    }));
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      projectRoot: "/repo/current-project",
+      dryRun: true,
+    });
+
+    const opened = await handleChatInput({
+      input: "/details exec-chat-1",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      findRun,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(opened.state.lastRunProjectRoot).toBe("/repo/source-project");
+
+    vi.clearAllMocks();
+    await handleChatInput({
+      input: "/retry",
+      state: opened.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(resolveWorkflow).toHaveBeenCalledWith("release-readiness", "/repo/source-project");
+  });
+
   it("does not query persisted run details when a memory summary matches", async () => {
     const runSummary = buildWorkflowRunSummary(executionResult);
     const findRun = vi.fn(async () => undefined);

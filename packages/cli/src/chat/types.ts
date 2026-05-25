@@ -54,6 +54,7 @@ export interface ChatSessionState {
   readonly lastError?: string;
   readonly lastRunCommand?: string;
   readonly lastRunTask?: string;
+  readonly lastRunProjectRoot?: string;
   readonly lastRunWorkflowLocator?: WorkflowLocator;
   readonly lastRunOptions?: ChatRunOptions;
   readonly lastRunSummary?: WorkflowRunSummary;

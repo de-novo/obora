@@ -746,12 +746,16 @@ const withRetryContextFromRunDetail = (
   const runTask = choice?.runTask ?? persistedDetail?.runTask;
   const runWorkflowLocator = choice?.runWorkflowLocator ?? persistedDetail?.runWorkflowLocator;
   const runOptions = choice?.runOptions ?? persistedDetail?.runOptions;
+  const runSummary = choice?.runSummary ?? persistedDetail?.runSummary;
+  const runProjectRoot = choice?.projectRoot ?? persistedDetail?.projectRoot;
   return runTask
     ? {
         ...state,
         lastRunTask: runTask,
+        lastRunProjectRoot: runProjectRoot,
         lastRunWorkflowLocator: runWorkflowLocator,
         lastRunOptions: runOptions,
+        ...(runSummary ? { lastRunSummary: runSummary } : {}),
         lastRunCommand: runWorkflowLocator
           ? `obora run ${runWorkflowLocator.displayPath}`
           : undefined,
@@ -1132,6 +1136,7 @@ const runChatTask = ({
             ...setChatStatus(runningState, "ready"),
             lastRunCommand,
             lastRunTask: message,
+            lastRunProjectRoot: state.projectRoot ?? state.cwd,
             lastRunWorkflowLocator: workflowLocator,
             lastRunOptions: hasRunMetadataOptions ? runMetadataOptions : undefined,
             ...(runSummary ? { lastRunSummary: runSummary } : {}),
@@ -1156,6 +1161,7 @@ const runChatTask = ({
             ...setChatStatus(runningState, "failed", failureMessage),
             lastRunCommand,
             lastRunTask: message,
+            lastRunProjectRoot: state.projectRoot ?? state.cwd,
             lastRunWorkflowLocator: workflowLocator,
             lastRunOptions: hasRunMetadataOptions ? runMetadataOptions : undefined,
           },
@@ -1298,7 +1304,10 @@ export const handleChatInput = async ({
           commandOptions,
         })
       : state.lastRunTask && state.lastRunSummary?.workflowName
-        ? resolveWorkflow(state.lastRunSummary.workflowName, state.projectRoot)
+        ? resolveWorkflow(
+            state.lastRunSummary.workflowName,
+            state.lastRunProjectRoot ?? state.projectRoot
+          )
             .then((workflowLocator): Promise<ChatTurnResult> =>
               runChatTask({
                 state,
