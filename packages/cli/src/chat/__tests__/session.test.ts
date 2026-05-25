@@ -2009,6 +2009,7 @@ describe("chat session", () => {
   });
 
   it("renames a listed chat session by number without switching", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
     const renameSession = vi.fn(async (_fromSessionId: string, toSessionId: string) =>
       createInitialChatState({
         sessionId: toSessionId,
@@ -2032,6 +2033,10 @@ describe("chat session", () => {
           updatedAt: "2026-05-24T00:00:00.000Z",
         },
       ],
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      workflowChoices: [locator],
+      showHelpPanel: true,
     };
 
     const result = await handleChatInput({
@@ -2045,6 +2050,11 @@ describe("chat session", () => {
 
     expect(renameSession).toHaveBeenCalledWith("session-b", "session-c");
     expect(result.state.sessionId).toBe("session-a");
+    expect(result.state.inspectedRunSummary).toBeUndefined();
+    expect(result.state.runChoices).toBeUndefined();
+    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.showHelpPanel).toBeUndefined();
     expect(result.state.messages.at(-1)?.content).toContain(
       "Renamed session session-b to session-c."
     );

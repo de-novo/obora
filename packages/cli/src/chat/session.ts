@@ -1022,7 +1022,7 @@ export const handleChatInput = async ({
                       `Renamed session ${target.sessionId} to ${renameCommand.nextSessionId}.`
                     )
                   : appendAssistant(
-                      state,
+                      withoutPanels(state),
                       `Renamed session ${target.sessionId} to ${renameCommand.nextSessionId}.`
                     ),
               exit: false,
