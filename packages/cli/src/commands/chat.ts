@@ -129,6 +129,10 @@ export function createChatCommand(): Command {
                   executionId: detail.runSummary.executionId,
                   workflowName: detail.runSummary.workflowName,
                   status: detail.runSummary.status,
+                  task: detail.runTask ?? "-",
+                  retry: detail.runTask
+                    ? (detail.runWorkflowLocator?.name ?? detail.runSummary.workflowName)
+                    : "-",
                   steps: `${detail.runSummary.completedStepCount}/${detail.runSummary.totalStepCount}`,
                   startedAt: detail.runSummary.startedAt,
                 }))

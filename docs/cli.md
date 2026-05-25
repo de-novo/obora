@@ -636,7 +636,7 @@ obora chat --show-run <executionId> [--session <id>]
 - `--filter-tag <tag>` only list sessions with the given tag
 - `--filter-project <path|current>` only list sessions for a project root
 - `--show-session` print the persisted chat session selected by `--session`
-- `--list-runs` list persisted workflow runs without starting the TUI; with `--session`, search only that session
+- `--list-runs` list persisted workflow runs without starting the TUI, including saved task and retry target; with `--session`, search only that session
 - `--filter-run-status <status>` only list persisted workflow runs with the given status
 - `--show-run <executionId>` print a persisted workflow run summary with step details; with `--session`, search only that session
 - `--once <message>` run one chat message and exit, useful for automation and smoke tests
