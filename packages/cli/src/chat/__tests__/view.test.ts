@@ -650,11 +650,52 @@ describe("renderChatView", () => {
     expect(plain).toContain("options provider");
     expect(plain).toContain("openrouter · model openrouter/owl-alpha");
     expect(plain).toContain("timeout 2500ms");
-    expect(plain).toContain("+1 file option(s)");
+    expect(plain).toContain("files+1");
     expect(plain).not.toContain("config /repo/.obora/config.yaml");
     expect(plain).toContain("#2 exec-chat-2 completed code-review");
     expect(plain).toContain("task -");
     expect(plain).toContain("retry none");
+  });
+
+  it("keeps run history retry and compact options readable in narrow terminals", () => {
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-runs",
+            cwd: "/repo",
+            dryRun: true,
+          }),
+          runChoices: [
+            {
+              runSummary,
+              sessionId: "session-runs",
+              messageId: "assistant:run",
+              source: "persisted",
+              runTask: "inspect a very long run options display in the terminal history panel",
+              runWorkflowLocator: locator,
+              runOptions: {
+                provider: "openrouter",
+                model: "openrouter/owl-alpha",
+                config: "/repo/.obora/config.yaml",
+                agents: "/repo/agents.yaml",
+                policy: "/repo/policy.yaml",
+                timeout: 2500,
+              },
+            },
+          ],
+        },
+        { columns: 88 }
+      )
+    );
+
+    const plain = stripAnsi(output);
+    expect(plain).toContain("task inspect a very long run options display in th");
+    expect(plain).toContain("retry release-readiness");
+    expect(plain).toContain("options provider openrouter");
+    expect(plain).toContain("files+3");
+    expect(plain).not.toContain("retry  \n");
+    expect(plain).not.toContain("config /repo/.obora/config.yaml");
   });
 
   it.each([

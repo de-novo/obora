@@ -16,7 +16,7 @@ const compactOptionParts = (options: ChatRunOptions | undefined): ReadonlyArray<
   ...(options?.provider ? [`provider ${options.provider}`] : []),
   ...(options?.model ? [`model ${options.model}`] : []),
   ...(options?.timeout === undefined ? [] : [`timeout ${options.timeout}ms`]),
-  ...(hiddenPathOptionCount(options) > 0 ? [`+${hiddenPathOptionCount(options)} file option(s)`] : []),
+  ...(hiddenPathOptionCount(options) > 0 ? [`files+${hiddenPathOptionCount(options)}`] : []),
 ];
 
 export const formatChatRunOptions = (

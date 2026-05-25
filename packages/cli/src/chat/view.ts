@@ -356,19 +356,26 @@ const renderRunHistorySource = (state: ChatSessionState, choice: ChatRunChoice):
     ? `${muted("session")} ${choice.sessionId}   ${muted("switch")} /session ${choice.sessionId}`
     : muted("session current");
 
-const renderRunHistoryMeta = (state: ChatSessionState, choice: ChatRunChoice): string => {
+const renderRunHistoryMeta = (
+  state: ChatSessionState,
+  choice: ChatRunChoice
+): ReadonlyArray<string> => {
   const summary = runChoiceSummary(choice);
   return [
-    renderRunHistorySource(state, choice),
-    `${muted("task")} ${formatRunTaskPreview(choice.runTask)}`,
+    [
+      renderRunHistorySource(state, choice),
+      `${muted("task")} ${formatRunTaskPreview(choice.runTask)}`,
+    ].join("   "),
     `${muted("retry")} ${choice.runTask && choice.runWorkflowLocator ? choice.runWorkflowLocator.name : "none"}`,
     ...(formatCompactChatRunOptions(choice.runOptions)
       ? [`${muted("options")} ${formatCompactChatRunOptions(choice.runOptions)}`]
       : []),
-    `${muted("started")} ${formatUpdatedTime(summary.startedAt)}`,
-    formatRunDuration(summary),
-    `${muted("open")} /details ${summary.executionId}`,
-  ].join("   ");
+    [
+      `${muted("started")} ${formatUpdatedTime(summary.startedAt)}`,
+      formatRunDuration(summary),
+      `${muted("open")} /details ${summary.executionId}`,
+    ].join("   "),
+  ];
 };
 
 const runFilterHint = (state: ChatSessionState): string =>
@@ -393,10 +400,12 @@ const renderRunHistory = (
             `${muted("details")} /details 1   ${muted("retry")} /retry 1   ${muted("by id")} /details <runId>`,
             `${muted("refresh")} /runs   ${muted("close")} /clear`,
             runFilterHint(state),
-            ...state.runChoices.slice(0, 8).flatMap((choice, index) => [
-              renderRunHistoryLine(state, choice, index),
-              renderRunHistoryMeta(state, choice),
-            ]),
+            ...state.runChoices
+              .slice(0, 8)
+              .flatMap((choice, index) => [
+                renderRunHistoryLine(state, choice, index),
+                ...renderRunHistoryMeta(state, choice),
+              ]),
           ],
           width
         ),
