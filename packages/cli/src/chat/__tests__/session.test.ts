@@ -418,6 +418,39 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("Run /retry to execute it again.");
   });
 
+  it("shows retry status for old run metadata without a resolved locator", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const selected = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      lastRunTask: "perform the release check",
+      lastRunSummary: runSummary,
+      status: "ready" as const,
+    };
+
+    const result = await handleChatInput({
+      input: "/retry status",
+      state: selected,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(result.state.messages.at(-1)?.content).toContain("Retry target:");
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Workflow: release-readiness (resolved on retry)"
+    );
+    expect(result.state.messages.at(-1)?.content).toContain("Task: perform the release check");
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Command: obora run release-readiness"
+    );
+    expect(result.state.messages.at(-1)?.content).toContain("Run /retry to execute it again.");
+  });
+
   it("retries a run by number from the run history", async () => {
     vi.clearAllMocks();
     const runSummary = buildWorkflowRunSummary(executionResult);
@@ -2558,6 +2591,28 @@ describe("chat session", () => {
     );
     expect(content).toContain("Last result: completed 1/1");
     expect(content).toContain("Details: /details exec-session-1");
+  });
+
+  it("shows session retry metadata for old runs without a resolved locator", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const state = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      status: "ready" as const,
+      lastRunTask: "perform the release check",
+      lastRunSummary: runSummary,
+    };
+
+    const result = await handleChatInput({
+      input: "/session",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    const content = result.state.messages.at(-1)?.content ?? "";
+    expect(content).toContain("Retry: release-readiness -> perform the release check");
+    expect(content).toContain("Last run: obora run release-readiness");
   });
 
   it("shows empty session metadata when no workflow or run exists", async () => {

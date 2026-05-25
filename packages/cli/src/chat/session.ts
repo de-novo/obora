@@ -942,22 +942,34 @@ const formatLastResult = (state: ChatSessionState): string =>
     ? `${state.lastRunSummary.status} ${state.lastRunSummary.completedStepCount}/${state.lastRunSummary.totalStepCount}`
     : "none";
 
+const retryWorkflowName = (state: ChatSessionState): string | undefined =>
+  state.lastRunWorkflowLocator?.name ?? state.lastRunSummary?.workflowName;
+
+const retryRunCommand = (state: ChatSessionState): string | undefined =>
+  state.lastRunWorkflowLocator
+    ? `obora run ${state.lastRunWorkflowLocator.displayPath}`
+    : retryWorkflowName(state)
+      ? `obora run ${retryWorkflowName(state)}`
+      : undefined;
+
 const formatRetryTarget = (state: ChatSessionState): string =>
-  state.lastRunTask && state.lastRunWorkflowLocator
-    ? `${state.lastRunWorkflowLocator.name} -> ${state.lastRunTask}`
+  state.lastRunTask && retryWorkflowName(state)
+    ? `${retryWorkflowName(state)} -> ${state.lastRunTask}`
     : "none";
 
 const formatRetryStatusMessage = (state: ChatSessionState): string =>
-  state.lastRunTask && state.lastRunWorkflowLocator
+  state.lastRunTask && retryWorkflowName(state)
     ? [
         "Retry target:",
-        `Workflow: ${state.lastRunWorkflowLocator.name} (${state.lastRunWorkflowLocator.scope})`,
+        `Workflow: ${retryWorkflowName(state)} (${
+          state.lastRunWorkflowLocator?.scope ?? "resolved on retry"
+        })`,
         `Task: ${state.lastRunTask}`,
-        `Path: ${state.lastRunWorkflowLocator.displayPath}`,
+        ...(state.lastRunWorkflowLocator ? [`Path: ${state.lastRunWorkflowLocator.displayPath}`] : []),
         ...(formatCompactChatRunOptions(state.lastRunOptions)
           ? [`Options: ${formatCompactChatRunOptions(state.lastRunOptions)}`]
           : []),
-        `Command: obora run ${state.lastRunWorkflowLocator.displayPath}`,
+        ...(retryRunCommand(state) ? [`Command: ${retryRunCommand(state)}`] : []),
         "Run /retry to execute it again.",
       ].join("\n")
     : "No retry target is available. Run a workflow task first with /run <task> or open a retryable run with /details.";
@@ -975,7 +987,7 @@ const formatSessionStatusMessage = (state: ChatSessionState): string =>
     `Model: ${state.modelName ?? "default"}`,
     `Messages: ${state.messages.length}`,
     `User turns: ${userTurnCount(state)}`,
-    `Last run: ${state.lastRunCommand ?? "none"}`,
+    `Last run: ${state.lastRunCommand ?? retryRunCommand(state) ?? "none"}`,
     `Retry: ${formatRetryTarget(state)}`,
     ...(formatCompactChatRunOptions(state.lastRunOptions)
       ? [`Retry options: ${formatCompactChatRunOptions(state.lastRunOptions)}`]
