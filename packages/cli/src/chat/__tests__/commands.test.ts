@@ -58,6 +58,12 @@ describe("chat command metadata", () => {
     expect(chatHelp).toContain("  /runs failed, /runs --project [path]");
     expect(chatHelp).toContain("/runs --status <queued|running|waiting|suspended|completed|failed|aborted>");
     expect(chatHelp).toContain("  /sessions here or /sessions [tag]");
+    expect(chatHelp).toContain(
+      "  /session rename 1 or /session rename <id> <new-id> - renames a session"
+    );
+    expect(chatHelp).toContain(
+      "  /session delete 1 or /session delete <id> - deletes a session"
+    );
     expect(chatHelp).toContain("  /clear or /details clear - closes the current panel");
     expect(chatCommandHelpSections.map((section) => section.title)).toEqual([
       "Workflow",

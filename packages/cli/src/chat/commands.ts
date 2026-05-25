@@ -65,12 +65,12 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
     group: "session",
   },
   {
-    command: "/session rename <id-or-number> <new-id>",
+    command: "/session rename 1 or /session rename <id> <new-id>",
     description: "renames a session",
     group: "session",
   },
   {
-    command: "/session delete <id-or-number>",
+    command: "/session delete 1 or /session delete <id>",
     description: "deletes a session",
     group: "session",
   },
