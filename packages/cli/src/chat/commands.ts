@@ -130,7 +130,7 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
     group: "run",
   },
   {
-    command: "/details [executionId-or-number]",
+    command: "/details 1 or /details <executionId>",
     description: "shows latest or selected step results",
     group: "details",
   },

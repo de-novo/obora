@@ -53,7 +53,7 @@ describe("chat command metadata", () => {
       "  /retry 1 or /retry <executionId> - reruns a retryable run from history"
     );
     expect(chatHelp).toContain(
-      "  /details [executionId-or-number] - shows latest or selected step results"
+      "  /details 1 or /details <executionId> - shows latest or selected step results"
     );
     expect(chatHelp).toContain("  /runs failed, /runs --project [path]");
     expect(chatHelp).toContain("/runs --status <queued|running|waiting|suspended|completed|failed|aborted>");
