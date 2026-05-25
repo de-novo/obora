@@ -66,6 +66,12 @@ interface ChatTurnResult {
   readonly exit: boolean;
 }
 
+interface ChatRunMessageContext {
+  readonly workflowTarget: string;
+  readonly runTask: string;
+  readonly runWorkflowLocator: WorkflowLocator;
+}
+
 interface SessionListFilter {
   readonly tag?: string;
   readonly projectRoot?: string;
@@ -245,10 +251,14 @@ const commandRunOptions = (options: ChatCommandOptions): Record<string, unknown>
 const appendAssistant = (
   state: ChatSessionState,
   content: string,
-  runSummary?: WorkflowRunSummary
+  runSummary?: WorkflowRunSummary,
+  runContext?: ChatRunMessageContext
 ): ChatSessionState =>
   appendChatMessage(state, {
     ...createChatMessage("assistant", content),
+    ...(runContext ? { workflowTarget: runContext.workflowTarget } : {}),
+    ...(runContext ? { runTask: runContext.runTask } : {}),
+    ...(runContext ? { runWorkflowLocator: runContext.runWorkflowLocator } : {}),
     ...(runSummary ? { runSummary } : {}),
   });
 
@@ -962,6 +972,7 @@ const runChatTask = ({
     workflowPath: workflowLocator.path,
   });
   const lastRunCommand = `obora run ${workflowLocator.displayPath}`;
+  const workflowTarget = state.workflowTarget ?? workflowLocator.displayPath;
   const runOptions = {
     ...commandRunOptions(commandOptions),
     input: runInput,
@@ -980,7 +991,14 @@ const runChatTask = ({
             ...(runSummary ? { lastRunSummary: runSummary } : {}),
           },
           formatRunSummaryMessage(runSummary, commandOptions.dryRun),
+          runSummary,
           runSummary
+            ? {
+                workflowTarget,
+                runTask: message,
+                runWorkflowLocator: workflowLocator,
+              }
+            : undefined
         ),
         exit: false,
       };

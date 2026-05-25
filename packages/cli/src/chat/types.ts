@@ -10,6 +10,9 @@ export interface ChatMessage {
   readonly role: ChatMessageRole;
   readonly content: string;
   readonly createdAt: string;
+  readonly workflowTarget?: string;
+  readonly runTask?: string;
+  readonly runWorkflowLocator?: WorkflowLocator;
   readonly runSummary?: WorkflowRunSummary;
 }
 

@@ -276,6 +276,99 @@ describe("chat session store", () => {
     });
   });
 
+  it("keeps per-message run task and workflow locator after workflow switching", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "obora-chat-store-switch-runs-"));
+    const alphaRun = {
+      ...runSummary,
+      executionId: "exec-alpha",
+      workflowName: "alpha-workflow",
+      startedAt: "2026-05-24T00:00:00.000Z",
+    };
+    const betaRun = {
+      ...runSummary,
+      executionId: "exec-beta",
+      workflowName: "beta-workflow",
+      startedAt: "2026-05-25T00:00:00.000Z",
+    };
+    const alphaLocator = {
+      id: "external:alpha",
+      scope: "external" as const,
+      name: "alpha-workflow",
+      path: join(cwd, "alpha.yaml"),
+      displayPath: "alpha.yaml",
+      editable: false,
+      sourceDir: join(cwd, "alpha.yaml"),
+      stepCount: 0,
+    };
+    const betaLocator = {
+      id: "external:beta",
+      scope: "external" as const,
+      name: "beta-workflow",
+      path: join(cwd, "beta.yaml"),
+      displayPath: "beta.yaml",
+      editable: false,
+      sourceDir: join(cwd, "beta.yaml"),
+      stepCount: 0,
+    };
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-with-switch",
+        cwd,
+        dryRun: false,
+        workflowTarget: "beta.yaml",
+      }),
+      lastRunTask: "run beta",
+      lastRunWorkflowLocator: betaLocator,
+      lastRunSummary: betaRun,
+      messages: [
+        {
+          id: "assistant:alpha",
+          role: "assistant" as const,
+          content: "Alpha completed.",
+          createdAt: "2026-05-24T00:00:01.000Z",
+          workflowTarget: "alpha.yaml",
+          runTask: "run alpha",
+          runWorkflowLocator: alphaLocator,
+          runSummary: alphaRun,
+        },
+        {
+          id: "assistant:beta",
+          role: "assistant" as const,
+          content: "Beta completed.",
+          createdAt: "2026-05-25T00:00:01.000Z",
+          workflowTarget: "beta.yaml",
+          runTask: "run beta",
+          runWorkflowLocator: betaLocator,
+          runSummary: betaRun,
+        },
+      ],
+    };
+
+    await saveChatSessionState({ cwd, state });
+
+    await expect(listChatRunDetails({ cwd, sessionId: "session-with-switch" })).resolves.toEqual([
+      expect.objectContaining({
+        messageId: "assistant:beta",
+        workflowTarget: "beta.yaml",
+        runTask: "run beta",
+        runWorkflowLocator: expect.objectContaining({ name: "beta-workflow" }),
+        runSummary: expect.objectContaining({ executionId: "exec-beta" }),
+      }),
+      expect.objectContaining({
+        messageId: "assistant:alpha",
+        workflowTarget: "alpha.yaml",
+        runTask: "run alpha",
+        runWorkflowLocator: expect.objectContaining({ name: "alpha-workflow" }),
+        runSummary: expect.objectContaining({ executionId: "exec-alpha" }),
+      }),
+    ]);
+    await expect(findChatRunDetail({ cwd, executionId: "exec-alpha" })).resolves.toMatchObject({
+      workflowTarget: "alpha.yaml",
+      runTask: "run alpha",
+      runWorkflowLocator: { name: "alpha-workflow" },
+    });
+  });
+
   it("preserves the last run task even when the workflow locator is unavailable", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "obora-chat-store-run-task-"));
     const state = {

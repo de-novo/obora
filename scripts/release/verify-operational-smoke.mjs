@@ -283,6 +283,95 @@ const verifyCliChatRunHistorySmoke = async (tmpDir) => {
   console.log('[PASS] Built CLI chat run history smoke passed.');
 };
 
+const verifyCliChatWorkflowSwitchSmoke = async (tmpDir) => {
+  const homeDir = join(tmpDir, 'chat-switch-home');
+  await mkdir(homeDir, { recursive: true });
+  const env = createSmokeEnv(homeDir);
+  const projectDir = join(tmpDir, 'chat-switch-project');
+  const sessionId = 'smoke-chat-switch-session';
+  const alphaTask = 'Run the alpha workflow task';
+  const betaTask = 'Run the beta workflow task';
+
+  await mkdir(projectDir, { recursive: true });
+  await writeFile(
+    join(projectDir, 'alpha.yaml'),
+    ['name: alpha-switch-workflow', 'version: "1.0"', 'steps: []', ''].join('\n'),
+    'utf8',
+  );
+  await writeFile(
+    join(projectDir, 'beta.yaml'),
+    ['name: beta-switch-workflow', 'version: "1.0"', 'steps: []', ''].join('\n'),
+    'utf8',
+  );
+
+  const alphaState = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat alpha workflow --json',
+    args: ['--json', 'chat', 'alpha.yaml', '--session', sessionId, '--once', alphaTask],
+  });
+  const alphaExecutionId = alphaState.lastRunSummary?.executionId;
+  assert(alphaExecutionId, 'workflow switch smoke must create an alpha execution');
+  assert(
+    alphaState.lastRunWorkflowLocator?.name === 'alpha-switch-workflow',
+    'alpha run must record its workflow locator',
+  );
+
+  const switchedState = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat /workflow beta.yaml --json',
+    args: ['--json', 'chat', '--session', sessionId, '--once', '/workflow beta.yaml'],
+  });
+  assert(
+    switchedState.workflowLocator?.name === 'beta-switch-workflow',
+    'workflow switch smoke must select beta workflow',
+  );
+
+  const betaState = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat beta workflow --json',
+    args: ['--json', 'chat', '--session', sessionId, '--once', betaTask],
+  });
+  const betaExecutionId = betaState.lastRunSummary?.executionId;
+  assert(betaExecutionId, 'workflow switch smoke must create a beta execution');
+  assert(betaExecutionId !== alphaExecutionId, 'beta run must create a distinct execution');
+  assert(
+    betaState.lastRunWorkflowLocator?.name === 'beta-switch-workflow',
+    'beta run must record its workflow locator',
+  );
+
+  const runs = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --list-runs --json after workflow switch',
+    args: ['--json', 'chat', '--list-runs', '--session', sessionId],
+  });
+  assert(
+    runs.some(
+      (detail) =>
+        detail.runSummary?.executionId === alphaExecutionId &&
+        detail.workflowTarget === 'alpha.yaml' &&
+        detail.runTask === alphaTask &&
+        detail.runWorkflowLocator?.name === 'alpha-switch-workflow',
+    ),
+    'run history must keep the alpha task and locator after switching to beta',
+  );
+  assert(
+    runs.some(
+      (detail) =>
+        detail.runSummary?.executionId === betaExecutionId &&
+        detail.workflowTarget === 'beta.yaml' &&
+        detail.runTask === betaTask &&
+        detail.runWorkflowLocator?.name === 'beta-switch-workflow',
+    ),
+    'run history must keep the beta task and locator',
+  );
+
+  console.log('[PASS] Built CLI chat workflow switch smoke passed.');
+};
+
 const withIsolatedDashboardEnv = async (fn) => {
   const keys = ['OBORA_HISTORY_DB_PATH', 'OBORA_RESUME_COMMAND', 'OBORA_DLQ_PATH'];
   const original = new Map(keys.map((key) => [key, process.env[key]]));
@@ -351,6 +440,7 @@ const main = async () => {
     await verifyCliOnboardingSmoke(tmpDir);
     await verifyCliChatOnceSmoke(tmpDir);
     await verifyCliChatRunHistorySmoke(tmpDir);
+    await verifyCliChatWorkflowSwitchSmoke(tmpDir);
     await verifyDashboardBootstrapSmoke(tmpDir);
     console.log('[PASS] Operational smoke completed successfully.');
   } finally {

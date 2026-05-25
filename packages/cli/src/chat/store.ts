@@ -349,6 +349,47 @@ const syntheticRunDetail = (
   runSummary: summary,
 });
 
+const messageWorkflowTarget = (
+  state: ChatSessionState,
+  message: ChatMessage
+): string | undefined =>
+  message.workflowTarget ??
+  (!state.lastRunSummary
+    ? state.workflowTarget
+    : state.lastRunSummary.executionId === message.runSummary?.executionId
+    ? state.workflowTarget
+    : undefined);
+
+const messageRetryContext = (
+  state: ChatSessionState,
+  message: ChatMessage
+): Pick<ChatRunDetail, "runTask" | "runWorkflowLocator"> =>
+  message.runTask || message.runWorkflowLocator
+    ? {
+        ...(message.runTask ? { runTask: message.runTask } : {}),
+        ...(message.runWorkflowLocator ? { runWorkflowLocator: message.runWorkflowLocator } : {}),
+      }
+    : message.runSummary
+      ? retryContextForRunSummary(state, message.runSummary)
+      : {};
+
+const chatRunDetailFromMessage = (
+  state: ChatSessionState,
+  message: ChatMessage
+): ChatRunDetail | undefined =>
+  message.runSummary
+    ? {
+        sessionId: state.sessionId,
+        messageId: message.id,
+        messageCreatedAt: message.createdAt,
+        ...(messageWorkflowTarget(state, message)
+          ? { workflowTarget: messageWorkflowTarget(state, message) }
+          : {}),
+        ...messageRetryContext(state, message),
+        runSummary: message.runSummary,
+      }
+    : undefined;
+
 const uniqueRunDetails = (
   details: ReadonlyArray<ChatRunDetail>
 ): ReadonlyArray<ChatRunDetail> =>
@@ -370,20 +411,7 @@ const sortRunDetailsByStartedAt = (
 
 const chatRunDetailsFromState = (state: ChatSessionState): ReadonlyArray<ChatRunDetail> =>
   uniqueRunDetails([
-    ...state.messages.flatMap((message) =>
-      message.runSummary
-        ? [
-            {
-              sessionId: state.sessionId,
-              messageId: message.id,
-              messageCreatedAt: message.createdAt,
-              ...(state.workflowTarget ? { workflowTarget: state.workflowTarget } : {}),
-              ...retryContextForRunSummary(state, message.runSummary),
-              runSummary: message.runSummary,
-            },
-          ]
-        : []
-    ),
+    ...state.messages.flatMap((message) => chatRunDetailFromMessage(state, message) ?? []),
     ...(state.lastRunSummary
       ? [syntheticRunDetail(state, state.lastRunSummary, "state:lastRunSummary")]
       : []),
