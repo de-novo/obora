@@ -1336,6 +1336,65 @@ describe("chat session", () => {
     );
   });
 
+  it("keeps chat open when persisted run listing fails", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const listRuns = vi.fn(async () => {
+      throw new Error("Run history unavailable");
+    });
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        projectRoot: "/repo/project-a",
+        dryRun: true,
+      }),
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      workflowChoices: [locator],
+      showHelpPanel: true,
+    };
+
+    const result = await handleChatInput({
+      input: "/runs --project packages/cli --tag release",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      listRuns,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(listRuns).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({
+        projectRoot: "/repo/packages/cli",
+        tag: "release",
+      })
+    );
+    expect(result.exit).toBe(false);
+    expect(result.state.status).toBe("failed");
+    expect(result.state.lastError).toBe("Run history unavailable");
+    expect(result.state.inspectedRunSummary).toBeUndefined();
+    expect(result.state.runChoices).toBeUndefined();
+    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.showHelpPanel).toBeUndefined();
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Run list failed: Run history unavailable"
+    );
+  });
+
   it("filters persisted runs by project, tag, and status from chat", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "obora-chat-run-filter-command-"));
     const runSummary = buildWorkflowRunSummary(executionResult);

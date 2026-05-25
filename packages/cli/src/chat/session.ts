@@ -971,7 +971,7 @@ export const handleChatInput = async ({
       };
     }
     const hasPersistedRunFilters = Boolean(filter.projectRoot || filter.tag || filter.status);
-    const details = await (listRuns
+    return (listRuns
       ? hasPersistedRunFilters
         ? listRuns(filter.sessionId, filter)
         : listRuns(filter.sessionId)
@@ -981,14 +981,15 @@ export const handleChatInput = async ({
           ...(filter.projectRoot ? { projectRoot: filter.projectRoot } : {}),
           ...(filter.tag ? { tag: filter.tag } : {}),
           ...(filter.status ? { status: filter.status } : {}),
-        }));
-    return {
-      state: appendAssistant(
-        withRunChoices(state, chatRunChoicesFromDetails(details).slice(0, 8)),
-        formatPersistedRunListMessage(details, filter)
-      ),
-      exit: false,
-    };
+        }))
+      .then((details): ChatTurnResult => ({
+        state: appendAssistant(
+          withRunChoices(state, chatRunChoicesFromDetails(details).slice(0, 8)),
+          formatPersistedRunListMessage(details, filter)
+        ),
+        exit: false,
+      }))
+      .catch((error: unknown): ChatTurnResult => listFailureResult(state, "Run list", error));
   }
 
   if (trimmed === "/sessions" || trimmed.startsWith("/sessions ")) {
