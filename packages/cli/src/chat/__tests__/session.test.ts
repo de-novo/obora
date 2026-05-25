@@ -375,6 +375,40 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("Dry-run completed");
   });
 
+  it("retries old metadata by resolving the last run workflow name", async () => {
+    vi.clearAllMocks();
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const selected = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        projectRoot: "/repo/project-a",
+        dryRun: true,
+      }),
+      workflowLocator: codeReviewLocator,
+      lastRunTask: "perform the release check",
+      lastRunSummary: runSummary,
+      status: "ready" as const,
+    };
+
+    const result = await handleChatInput({
+      input: "/retry",
+      state: selected,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(resolveWorkflow).toHaveBeenCalledWith("release-readiness", "/repo/project-a");
+    expect(runWorkflow).toHaveBeenCalledWith(
+      locator.path,
+      expect.objectContaining({
+        input: expect.stringContaining("perform the release check"),
+      })
+    );
+    expect(result.state.lastRunWorkflowLocator).toBe(locator);
+  });
+
   it("shows the current retry target without running it", async () => {
     vi.clearAllMocks();
     const selected = {

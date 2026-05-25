@@ -1288,16 +1288,37 @@ export const handleChatInput = async ({
   }
 
   if (trimmed === "/retry") {
-    const retryWorkflowLocator = state.lastRunWorkflowLocator ?? state.workflowLocator;
-    return retryWorkflowLocator && state.lastRunTask
+    return state.lastRunWorkflowLocator && state.lastRunTask
       ? runChatTask({
           state,
-          workflowLocator: retryWorkflowLocator,
+          workflowLocator: state.lastRunWorkflowLocator,
           message: state.lastRunTask,
           ...(state.lastRunOptions ? { runOptionsOverride: state.lastRunOptions } : {}),
           runWorkflow,
           commandOptions,
         })
+      : state.lastRunTask && state.lastRunSummary?.workflowName
+        ? resolveWorkflow(state.lastRunSummary.workflowName, state.projectRoot)
+            .then((workflowLocator): Promise<ChatTurnResult> =>
+              runChatTask({
+                state,
+                workflowLocator,
+                message: state.lastRunTask ?? "",
+                ...(state.lastRunOptions ? { runOptionsOverride: state.lastRunOptions } : {}),
+                runWorkflow,
+                commandOptions,
+              })
+            )
+            .catch((error: unknown): ChatTurnResult => workflowResolveFailureResult(state, error))
+        : state.workflowLocator && state.lastRunTask
+          ? runChatTask({
+              state,
+              workflowLocator: state.workflowLocator,
+              message: state.lastRunTask,
+              ...(state.lastRunOptions ? { runOptionsOverride: state.lastRunOptions } : {}),
+              runWorkflow,
+              commandOptions,
+            })
       : {
           state: appendAssistant(
             withoutPanels(state),
