@@ -2061,6 +2061,7 @@ describe("chat session", () => {
   });
 
   it("deletes a listed inactive chat session by number", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
     const deleteSession = vi.fn(async (_sessionId: string) => true);
     const state = {
       ...createInitialChatState({
@@ -2078,6 +2079,10 @@ describe("chat session", () => {
           updatedAt: "2026-05-24T00:00:00.000Z",
         },
       ],
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      workflowChoices: [locator],
+      showHelpPanel: true,
     };
 
     const result = await handleChatInput({
@@ -2090,6 +2095,11 @@ describe("chat session", () => {
     });
 
     expect(deleteSession).toHaveBeenCalledWith("session-b");
+    expect(result.state.inspectedRunSummary).toBeUndefined();
+    expect(result.state.runChoices).toBeUndefined();
+    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.showHelpPanel).toBeUndefined();
     expect(result.state.messages.at(-1)?.content).toContain("Deleted session session-b.");
   });
 

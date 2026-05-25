@@ -1060,7 +1060,7 @@ export const handleChatInput = async ({
             }
           : deleted
             ? {
-                state: appendAssistant(state, `Deleted session ${target.sessionId}.`),
+                state: appendAssistant(withoutPanels(state), `Deleted session ${target.sessionId}.`),
                 exit: false,
               }
             : {
