@@ -685,6 +685,7 @@ describe("renderChatView", () => {
           lastRunSummary: runSummary,
           inspectedRunSummary: runSummary,
           lastRunTask: "perform the release check",
+          lastRunProjectRoot: "/repo/source-project",
           lastRunWorkflowLocator: locator,
           lastRunOptions: {
             provider: "openrouter",
@@ -701,6 +702,7 @@ describe("renderChatView", () => {
 
     const plain = stripAnsi(output);
     expect(plain).toContain("run details");
+    expect(plain).toContain("project /repo/source-project");
     expect(plain).toContain(
       "options provider openrouter · model openrouter/owl-alpha · timeout 2500ms · files+3"
     );
