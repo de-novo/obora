@@ -1972,6 +1972,73 @@ describe("chat session", () => {
     );
   });
 
+  it("opens the newest persisted run first for a selected session", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "obora-chat-session-run-sort-"));
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const olderRun = {
+      ...runSummary,
+      executionId: "exec-older",
+      startedAt: "2026-05-24T00:00:00.000Z",
+    };
+    const newerRun = {
+      ...runSummary,
+      executionId: "exec-newer",
+      startedAt: "2026-05-25T00:00:00.000Z",
+    };
+    await saveChatSessionState({
+      cwd,
+      state: {
+        ...createInitialChatState({
+          sessionId: "session-sort",
+          cwd,
+          dryRun: false,
+        }),
+        messages: [
+          {
+            id: "assistant:older",
+            role: "assistant",
+            content: olderRun.message,
+            createdAt: "2026-05-24T00:00:01.000Z",
+            runSummary: olderRun,
+          },
+          {
+            id: "assistant:newer",
+            role: "assistant",
+            content: newerRun.message,
+            createdAt: "2026-05-25T00:00:01.000Z",
+            runSummary: newerRun,
+          },
+        ],
+      },
+    });
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd,
+      dryRun: true,
+    });
+
+    const listed = await handleChatInput({
+      input: "/runs --session session-sort",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+    const opened = await handleChatInput({
+      input: "/details 1",
+      state: listed.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(listed.state.runChoices?.map((choice) => choice.runSummary.executionId)).toEqual([
+      "exec-newer",
+      "exec-older",
+    ]);
+    expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-newer");
+  });
+
   it("reports missing run details without requiring a workflow selection", async () => {
     vi.clearAllMocks();
     const state = createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true });
