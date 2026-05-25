@@ -400,6 +400,13 @@ const withSessionChoicesOnly = (state: ChatSessionState): ChatSessionState => ({
     : {}),
 });
 
+const withWorkflowChoicesOnly = (state: ChatSessionState): ChatSessionState => ({
+  ...withoutPanels(state),
+  ...(state.workflowChoices && state.workflowChoices.length > 0
+    ? { workflowChoices: state.workflowChoices }
+    : {}),
+});
+
 const withoutDeletedSessionChoice = (
   state: ChatSessionState,
   deletedSessionId: string
@@ -1551,7 +1558,7 @@ export const handleChatInput = async ({
         })
       : {
           state: appendAssistant(
-            withoutPanels(state),
+            withWorkflowChoicesOnly(state),
             "Workflow choice not found. Run /workflows first, then use /run #1 <task>."
           ),
           exit: false,

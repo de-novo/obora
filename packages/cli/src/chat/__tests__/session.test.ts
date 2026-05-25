@@ -3791,12 +3791,12 @@ describe("chat session", () => {
           updatedAt: "2026-05-22T00:00:00.000Z",
         },
       ],
-      workflowChoices: [],
+      workflowChoices: [locator],
       showHelpPanel: true,
     };
 
     const result = await handleChatInput({
-      input: "/run #1 inspect the branch",
+      input: "/run #2 inspect the branch",
       state,
       resolveWorkflow,
       runWorkflow,
@@ -3807,7 +3807,7 @@ describe("chat session", () => {
     expect(result.state.inspectedRunSummary).toBeUndefined();
     expect(result.state.runChoices).toBeUndefined();
     expect(result.state.sessionChoices).toBeUndefined();
-    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.workflowChoices).toEqual([locator]);
     expect(result.state.showHelpPanel).toBeUndefined();
     expect(result.state.messages.at(-1)?.content).toContain("Workflow choice not found");
   });
