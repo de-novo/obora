@@ -458,9 +458,11 @@ describe("chat session", () => {
       ...createInitialChatState({
         sessionId: "session-a",
         cwd: "/repo",
+        projectRoot: "/repo/current-project",
         dryRun: true,
       }),
       lastRunTask: "perform the release check",
+      lastRunProjectRoot: "/repo/source-project",
       lastRunSummary: runSummary,
       status: "ready" as const,
     };
@@ -477,6 +479,9 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("Retry target:");
     expect(result.state.messages.at(-1)?.content).toContain(
       "Workflow: release-readiness (resolved on retry)"
+    );
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Retry project: /repo/source-project"
     );
     expect(result.state.messages.at(-1)?.content).toContain("Task: perform the release check");
     expect(result.state.messages.at(-1)?.content).toContain(
@@ -2685,9 +2690,15 @@ describe("chat session", () => {
   it("shows session retry metadata for old runs without a resolved locator", async () => {
     const runSummary = buildWorkflowRunSummary(executionResult);
     const state = {
-      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        projectRoot: "/repo/current-project",
+        dryRun: true,
+      }),
       status: "ready" as const,
       lastRunTask: "perform the release check",
+      lastRunProjectRoot: "/repo/source-project",
       lastRunSummary: runSummary,
     };
 
@@ -2701,6 +2712,7 @@ describe("chat session", () => {
 
     const content = result.state.messages.at(-1)?.content ?? "";
     expect(content).toContain("Retry: release-readiness -> perform the release check");
+    expect(content).toContain("Retry project: /repo/source-project");
     expect(content).toContain("Last run: obora run release-readiness");
   });
 

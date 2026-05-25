@@ -964,6 +964,11 @@ const formatRetryTarget = (state: ChatSessionState): string =>
     ? `${retryWorkflowName(state)} -> ${state.lastRunTask}`
     : "none";
 
+const retryProjectLine = (state: ChatSessionState): string | undefined =>
+  state.lastRunProjectRoot && state.lastRunProjectRoot !== (state.projectRoot ?? state.cwd)
+    ? `Retry project: ${state.lastRunProjectRoot}`
+    : undefined;
+
 const formatRetryStatusMessage = (state: ChatSessionState): string =>
   state.lastRunTask && retryWorkflowName(state)
     ? [
@@ -971,6 +976,7 @@ const formatRetryStatusMessage = (state: ChatSessionState): string =>
         `Workflow: ${retryWorkflowName(state)} (${
           state.lastRunWorkflowLocator?.scope ?? "resolved on retry"
         })`,
+        ...(retryProjectLine(state) ? [retryProjectLine(state)] : []),
         `Task: ${state.lastRunTask}`,
         ...(state.lastRunWorkflowLocator ? [`Path: ${state.lastRunWorkflowLocator.displayPath}`] : []),
         ...(formatCompactChatRunOptions(state.lastRunOptions)
@@ -996,6 +1002,7 @@ const formatSessionStatusMessage = (state: ChatSessionState): string =>
     `User turns: ${userTurnCount(state)}`,
     `Last run: ${state.lastRunCommand ?? retryRunCommand(state) ?? "none"}`,
     `Retry: ${formatRetryTarget(state)}`,
+    ...(retryProjectLine(state) ? [retryProjectLine(state)] : []),
     ...(formatCompactChatRunOptions(state.lastRunOptions)
       ? [`Retry options: ${formatCompactChatRunOptions(state.lastRunOptions)}`]
       : []),
