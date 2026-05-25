@@ -276,7 +276,7 @@ describe("renderChatView", () => {
     const plain = stripAnsi(output);
 
     expect(plain).toContain("runs");
-    expect(plain).toContain("select 1");
+    expect(plain).toContain("details /details 1");
     expect(plain).toContain("/details <runId>");
     expect(plain).toContain("close /clear");
     expect(plain).toContain("/runs --project");
