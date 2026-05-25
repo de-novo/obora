@@ -177,6 +177,9 @@ const locatorFromApiPath = async (
   const prefix = "/api/workflows/";
   const encodedId = pathname.startsWith(prefix) ? pathname.slice(prefix.length) : "";
   const locatorId = decodeURIComponent(encodedId);
+  if (locatorId === options.locator.id) {
+    return options.locator;
+  }
   const discovery = await discoverWorkflowLocators({
     ...baseResolveRequest(options),
     scope: "all",

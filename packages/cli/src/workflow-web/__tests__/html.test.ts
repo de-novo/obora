@@ -22,6 +22,8 @@ describe("workflow web html", () => {
     expect(html).toContain("release &lt;readiness&gt;");
     expect(html).toContain("project workflow");
     expect(html).toContain('button id="save" type="button" class="primary"');
+    expect(html).toContain('const workflowId = "project%3Ahtml";');
+    expect(html).toContain('"/api/workflows/" + workflowId');
     expect(html).not.toContain("readonly");
   });
 

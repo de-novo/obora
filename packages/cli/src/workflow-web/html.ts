@@ -171,7 +171,8 @@ export const renderWorkflowWebHtml = ({
     </main>
     <script>
       const token = new URLSearchParams(location.search).get("token") || ${JSON.stringify(token)};
-      const apiUrl = "/api/workflow?token=" + encodeURIComponent(token);
+      const workflowId = ${JSON.stringify(encodeURIComponent(locator.id))};
+      const apiUrl = "/api/workflows/" + workflowId + "?token=" + encodeURIComponent(token);
       const statusEl = document.getElementById("status");
       const yamlEl = document.getElementById("yaml");
       const reloadEl = document.getElementById("reload");

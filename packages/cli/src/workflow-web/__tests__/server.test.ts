@@ -93,12 +93,16 @@ describe("workflow web bridge", () => {
     await withTempWorkflow(async ({ locator }) => {
       const bridge = await startWorkflowWebBridge({ locator, mode: "build", open: false });
       const htmlResponse = await fetch(bridge.url);
+      const currentLocatorResponse = await fetch(
+        `${bridge.apiBaseUrl}/api/workflows/${encodeURIComponent(locator.id)}?token=${bridge.token}`
+      );
       const unauthorizedResponse = await fetch(`${bridge.apiBaseUrl}/api/workflow?token=wrong`);
 
       await bridge.close();
 
       expect(htmlResponse.status).toBe(200);
       expect(await htmlResponse.text()).toContain("release-readiness");
+      expect(currentLocatorResponse.status).toBe(200);
       expect(unauthorizedResponse.status).toBe(401);
     });
   });
