@@ -255,6 +255,7 @@ describe("renderChatView", () => {
               runSummary,
               sessionId: "session-a",
               source: "session",
+              projectRoot: "/repo",
             },
             {
               runSummary: {
@@ -265,6 +266,7 @@ describe("renderChatView", () => {
                 totalStepCount: 2,
               },
               sessionId: "history-session",
+              projectRoot: "/repo/history-project",
               messageId: "assistant:run",
               source: "persisted",
             },
@@ -286,6 +288,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("○ #2 exec-chat-2 completed code-review steps 1/2");
     expect(plain).toContain("session session-a");
     expect(plain).toContain("session history-session");
+    expect(plain).toContain("project /repo/history-project");
     expect(plain).toContain("switch /session history-session");
     expect(plain).toContain("open /details exec-chat-1");
     expect(plain).toContain("viewing run exec-chat-1");
@@ -465,6 +468,7 @@ describe("renderChatView", () => {
               sessionId: "session-a",
               messageId: "assistant:inspected",
               source: "persisted",
+              projectRoot: "/repo/source-project",
               runTask: "summarize the current diff and explain risk",
               runWorkflowLocator: {
                 ...locator,
@@ -495,6 +499,7 @@ describe("renderChatView", () => {
       "options provider openrouter · model openrouter/owl-alpha · timeout 2500ms · files+3"
     );
     expect(plain).toContain("project /repo");
+    expect(plain).toContain("project /repo/source-project");
     expect(plain).toContain("path .obora/workflows/code-review.yaml");
     expect(plain).toContain("viewing run exec-inspected");
     expect(plain).toContain("viewing run exec-inspected  ·  /details exec-inspected");

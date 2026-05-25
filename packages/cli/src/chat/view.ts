@@ -260,6 +260,16 @@ const inspectedRunOptions = (
         : undefined)
   );
 
+const inspectedRunProjectRoot = (
+  state: ChatSessionState,
+  summary: WorkflowRunSummary,
+  choice: ChatRunChoice | undefined
+): string =>
+  choice?.projectRoot ??
+  (state.lastRunSummary?.executionId === summary.executionId
+    ? (state.lastRunProjectRoot ?? state.projectRoot ?? state.cwd)
+    : (state.projectRoot ?? state.cwd));
+
 const runDetailHeaderLines = (
   state: ChatSessionState,
   summary: WorkflowRunSummary
@@ -268,11 +278,12 @@ const runDetailHeaderLines = (
   const task = inspectedRunTask(state, summary, choice);
   const workflow = inspectedRunWorkflow(state, summary, choice);
   const options = inspectedRunOptions(state, summary, choice);
+  const projectRoot = inspectedRunProjectRoot(state, summary, choice);
   return [
     `${muted("id")} ${summary.executionId}   ${muted("status")} ${summary.status}   ${muted("steps")} ${summary.completedStepCount}/${summary.totalStepCount}`,
     `${muted("workflow")} ${summary.workflowName}   ${formatRunDuration(summary)}`,
     `${muted("task")} ${task ? formatRunTaskPreview(task) : "-"}`,
-    `${muted("retry")} ${task && workflow ? workflow.name : "none"}   ${muted("project")} ${compactPath(state.projectRoot ?? state.cwd, 52)}`,
+    `${muted("retry")} ${task && workflow ? workflow.name : "none"}   ${muted("project")} ${compactPath(projectRoot, 52)}`,
     ...(options ? [`${muted("options")} ${options}`] : []),
     ...(workflow ? [`${muted("path")} ${compactPath(workflow.displayPath, 72)}`] : []),
     `${muted("summary")} ${summary.message}`,
@@ -366,9 +377,14 @@ const renderRunHistoryLine = (
 };
 
 const renderRunHistorySource = (state: ChatSessionState, choice: ChatRunChoice): string =>
-  choice.sessionId && choice.sessionId !== state.sessionId
-    ? `${muted("session")} ${choice.sessionId}   ${muted("switch")} /session ${choice.sessionId}`
-    : muted("session current");
+  [
+    choice.sessionId && choice.sessionId !== state.sessionId
+      ? `${muted("session")} ${choice.sessionId}   ${muted("switch")} /session ${choice.sessionId}`
+      : muted("session current"),
+    ...(choice.projectRoot && choice.projectRoot !== (state.projectRoot ?? state.cwd)
+      ? [`${muted("project")} ${compactPath(choice.projectRoot, 48)}`]
+      : []),
+  ].join("   ");
 
 const renderRunHistoryMeta = (
   state: ChatSessionState,
