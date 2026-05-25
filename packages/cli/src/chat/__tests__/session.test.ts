@@ -2893,6 +2893,14 @@ describe("chat session", () => {
           messageCount: 1,
           updatedAt: "2026-05-24T00:00:00.000Z",
         },
+        {
+          sessionId: "session-c",
+          status: "idle" as const,
+          cwd: "/repo",
+          tags: ["archive"],
+          messageCount: 2,
+          updatedAt: "2026-05-23T00:00:00.000Z",
+        },
       ],
       inspectedRunSummary: runSummary,
       runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
@@ -2939,6 +2947,14 @@ describe("chat session", () => {
           messageCount: 1,
           updatedAt: "2026-05-24T00:00:00.000Z",
         },
+        {
+          sessionId: "session-c",
+          status: "idle" as const,
+          cwd: "/repo",
+          tags: ["archive"],
+          messageCount: 2,
+          updatedAt: "2026-05-23T00:00:00.000Z",
+        },
       ],
       inspectedRunSummary: runSummary,
       runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
@@ -2958,7 +2974,9 @@ describe("chat session", () => {
     expect(deleteSession).toHaveBeenCalledWith("session-b");
     expect(result.state.inspectedRunSummary).toBeUndefined();
     expect(result.state.runChoices).toBeUndefined();
-    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.sessionChoices?.map((session) => session.sessionId)).toEqual([
+      "session-c",
+    ]);
     expect(result.state.workflowChoices).toBeUndefined();
     expect(result.state.showHelpPanel).toBeUndefined();
     expect(result.state.messages.at(-1)?.content).toContain("Deleted session session-b.");

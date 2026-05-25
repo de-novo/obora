@@ -393,6 +393,21 @@ const withoutPanels = (state: ChatSessionState): ChatSessionState => ({
   showHelpPanel: undefined,
 });
 
+const withoutDeletedSessionChoice = (
+  state: ChatSessionState,
+  deletedSessionId: string
+): ChatSessionState => {
+  const nextSessionChoices = state.sessionChoices?.filter(
+    (summary) => summary.sessionId !== deletedSessionId
+  );
+  return {
+    ...withoutPanels(state),
+    ...(nextSessionChoices && nextSessionChoices.length > 0
+      ? { sessionChoices: nextSessionChoices }
+      : {}),
+  };
+};
+
 const hasPickerPanel = (state: ChatSessionState): boolean =>
   Boolean(
     (state.runChoices && state.runChoices.length > 0) ||
@@ -1279,11 +1294,12 @@ export const handleChatInput = async ({
     const deleteTarget = sessionDeleteTargetFromCommand(sessionTarget);
     if (deleteTarget !== undefined) {
       const target = sessionIdFromTarget(state, deleteTarget);
+      const deleteSessionId = target.sessionId;
       const deleted =
-        target.sessionId && target.sessionId !== state.sessionId
+        deleteSessionId && deleteSessionId !== state.sessionId
           ? await (deleteSession
-              ? deleteSession(target.sessionId)
-              : deleteChatSessionState({ cwd: state.cwd, sessionId: target.sessionId }))
+              ? deleteSession(deleteSessionId)
+              : deleteChatSessionState({ cwd: state.cwd, sessionId: deleteSessionId }))
           : false;
       return target.missingChoice
         ? {
@@ -1293,7 +1309,7 @@ export const handleChatInput = async ({
             ),
             exit: false,
           }
-        : target.sessionId === state.sessionId
+        : deleteSessionId === state.sessionId
           ? {
               state: appendAssistant(
                 withoutPanels(state),
@@ -1301,9 +1317,12 @@ export const handleChatInput = async ({
               ),
               exit: false,
             }
-          : deleted
+          : deleted && deleteSessionId
             ? {
-                state: appendAssistant(withoutPanels(state), `Deleted session ${target.sessionId}.`),
+                state: appendAssistant(
+                  withoutDeletedSessionChoice(state, deleteSessionId),
+                  `Deleted session ${deleteSessionId}.`
+                ),
                 exit: false,
               }
             : {
