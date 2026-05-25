@@ -3,7 +3,7 @@ import type { WorkflowLocator, WorkflowRunStepSummary, WorkflowRunSummary } from
 
 import { chatCommandHelpSections, chatPromptCommandRows } from "./commands.js";
 import { runChoiceSummary } from "./run-choices.js";
-import { formatChatRunOptions } from "./run-options-format.js";
+import { formatCompactChatRunOptions } from "./run-options-format.js";
 import { visibleChatMessages } from "./state.js";
 import type { ChatMessage, ChatRunChoice, ChatSessionState, ChatSessionStatus } from "./types.js";
 import type { ChatSessionSummary } from "./store.js";
@@ -362,8 +362,8 @@ const renderRunHistoryMeta = (state: ChatSessionState, choice: ChatRunChoice): s
     renderRunHistorySource(state, choice),
     `${muted("task")} ${formatRunTaskPreview(choice.runTask)}`,
     `${muted("retry")} ${choice.runTask && choice.runWorkflowLocator ? choice.runWorkflowLocator.name : "none"}`,
-    ...(formatChatRunOptions(choice.runOptions)
-      ? [`${muted("options")} ${formatChatRunOptions(choice.runOptions)}`]
+    ...(formatCompactChatRunOptions(choice.runOptions)
+      ? [`${muted("options")} ${formatCompactChatRunOptions(choice.runOptions)}`]
       : []),
     `${muted("started")} ${formatUpdatedTime(summary.startedAt)}`,
     formatRunDuration(summary),

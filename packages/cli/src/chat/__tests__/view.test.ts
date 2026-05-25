@@ -649,9 +649,9 @@ describe("renderChatView", () => {
     expect(plain).toContain("retry release-readiness");
     expect(plain).toContain("options provider");
     expect(plain).toContain("openrouter · model openrouter/owl-alpha");
-    expect(plain).toContain("config /repo/.obora/config.yaml");
-    expect(plain).toContain("timeout");
-    expect(plain).toContain("2500ms");
+    expect(plain).toContain("timeout 2500ms");
+    expect(plain).toContain("+1 file option(s)");
+    expect(plain).not.toContain("config /repo/.obora/config.yaml");
     expect(plain).toContain("#2 exec-chat-2 completed code-review");
     expect(plain).toContain("task -");
     expect(plain).toContain("retry none");
