@@ -100,7 +100,10 @@ describe("chat command metadata", () => {
         inspectedRunSummary: runSummary,
         runChoices: [{ runSummary, sessionId: "session-a" }],
       })
-    ).toEqual(["/clear  1  /details <runId>", "/runs  /session  /project  /help"]);
+    ).toEqual([
+      "/clear  /details 1  /retry 1  /details <runId>",
+      "/runs  /session  /project  /help",
+    ]);
     expect(
       chatPromptCommandRows({
         ...state,

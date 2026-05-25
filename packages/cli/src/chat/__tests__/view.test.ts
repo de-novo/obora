@@ -289,7 +289,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("switch /session history-session");
     expect(plain).toContain("open /details exec-chat-1");
     expect(plain).toContain("viewing run exec-chat-1");
-    expect(plain).toContain("/clear  1  /details <runId>");
+    expect(plain).toContain("/clear  /details 1  /retry 1  /details <runId>");
     expect(plain).toContain("/runs  /session  /project  /help");
   });
 
@@ -487,7 +487,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("path .obora/workflows/code-review.yaml");
     expect(plain).toContain("viewing run exec-inspected");
     expect(plain).toContain("viewing run exec-inspected  ·  /details exec-inspected");
-    expect(plain).toContain("/clear  1  /details <runId>");
+    expect(plain).toContain("/clear  /details 1  /retry 1  /details <runId>");
     expect(plain).toContain("#1 review completed");
     expect(plain).toContain("format text");
     expect(plain).toContain("method Direct repository inspection");

@@ -188,7 +188,10 @@ export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<st
   if (state.showHelpPanel) return ["/clear  /workflow <name>  /runs", "/session  /project  /exit"];
   if (state.inspectedRunSummary) {
     return state.runChoices && state.runChoices.length > 0
-      ? ["/clear  1  /details <runId>", "/runs  /session  /project  /help"]
+      ? [
+          "/clear  /details 1  /retry 1  /details <runId>",
+          "/runs  /session  /project  /help",
+        ]
       : ["/clear  /runs  /details <runId>", "/session  /project  /help"];
   }
   if (state.runChoices && state.runChoices.length > 0) {
