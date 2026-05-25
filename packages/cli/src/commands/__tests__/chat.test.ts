@@ -260,6 +260,17 @@ describe("chat command", () => {
       messageCreatedAt: "2026-05-24T00:00:01.000Z",
       workflowTarget: "release-readiness",
       runTask: "prepare release",
+      runWorkflowLocator: {
+        id: "project:release-readiness",
+        scope: "project",
+        name: "release-readiness",
+        path: "/repo/.obora/workflows/release-readiness.yaml",
+        displayPath: ".obora/workflows/release-readiness.yaml",
+        editable: true,
+        sourceDir: "/repo/.obora/workflows",
+        stepCount: 1,
+        projectRoot: "/repo",
+      },
       runSummary: {
         executionId: "exec-123",
         workflowName: "release-readiness",
@@ -300,7 +311,19 @@ describe("chat command", () => {
       expect.objectContaining({ executionId: "exec-123", sessionId: "session-a" })
     );
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Run exec-123"));
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("Message: assistant:run at 2026-05-24T00:00:01.000Z")
+    );
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Task: prepare release"));
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("Workflow target: release-readiness")
+    );
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Retry: release-readiness"));
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "Workflow locator: release-readiness (.obora/workflows/release-readiness.yaml)"
+      )
+    );
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("tools: file_read"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("artifacts: README.md"));
     expect(console.log).toHaveBeenCalledWith(

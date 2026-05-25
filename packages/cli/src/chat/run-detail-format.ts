@@ -36,6 +36,7 @@ export const formatChatRunDetail = (detail: ChatRunDetail): string =>
   [
     `Run ${detail.runSummary.executionId}`,
     `Session: ${detail.sessionId}`,
+    `Message: ${detail.messageId} at ${detail.messageCreatedAt}`,
     `Workflow: ${detail.runSummary.workflowName}`,
     `Status: ${detail.runSummary.status}`,
     `Steps: ${detail.runSummary.completedStepCount}/${detail.runSummary.totalStepCount}`,
@@ -45,6 +46,8 @@ export const formatChatRunDetail = (detail: ChatRunDetail): string =>
       ? []
       : [`Duration: ${detail.runSummary.durationMs}ms`]),
     ...(detail.runTask ? [`Task: ${detail.runTask}`] : []),
+    ...(detail.workflowTarget ? [`Workflow target: ${detail.workflowTarget}`] : []),
+    `Retry: ${detail.runTask && detail.runWorkflowLocator ? detail.runWorkflowLocator.name : "not available"}`,
     ...(detail.runWorkflowLocator
       ? [
           `Workflow locator: ${detail.runWorkflowLocator.name} (${detail.runWorkflowLocator.displayPath})`,
