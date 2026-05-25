@@ -568,6 +568,8 @@ describe("renderChatView", () => {
     expect(plain).toContain("status failed");
     expect(plain).toContain("duration -");
     expect(plain).toContain("error Provider returned error");
+    expect(plain).toContain("attention #1 collect missing");
+    expect(plain).toContain("cause Provider returned error");
     expect(plain).toContain("#1 collect missing");
     expect(plain).toContain("issues Provider returned error");
   });

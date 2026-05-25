@@ -227,6 +227,23 @@ const runDetailHeaderLines = (summary: WorkflowRunSummary): ReadonlyArray<string
   ...(summary.error ? [`${muted("error")} ${red(summary.error)}`] : []),
 ];
 
+const attentionSteps = (
+  summary: WorkflowRunSummary
+): ReadonlyArray<readonly [WorkflowRunStepSummary, number]> =>
+  summary.steps
+    .map((step, index) => [step, index] as const)
+    .filter(
+      ([step]) => step.status !== "completed" || stepValues(step.issues).length > 0
+    );
+
+const runDetailAttentionLines = (summary: WorkflowRunSummary): ReadonlyArray<string> =>
+  attentionSteps(summary).flatMap(([step, index]) => [
+    `${muted("attention")} #${index + 1} ${step.name} ${step.status}`,
+    ...(stepValues(step.issues).length > 0
+      ? [`${muted("cause")} ${stepValues(step.issues).join("; ")}`]
+      : []),
+  ]);
+
 const runDetailStepLines = (
   step: WorkflowRunStepSummary,
   index: number
@@ -259,6 +276,7 @@ const renderRunInspector = (
           "run details",
           [
             ...runDetailHeaderLines(summary),
+            ...runDetailAttentionLines(summary),
             "",
             ...summary.steps.flatMap(runDetailStepLines),
           ],
