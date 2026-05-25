@@ -11,6 +11,7 @@ const execFileAsync = promisify(execFile);
 const rootDir = fileURLToPath(new URL('../../', import.meta.url));
 const cliPath = join(rootDir, 'packages/cli/bin/obora.js');
 const cliDistPath = join(rootDir, 'packages/cli/dist/index.js');
+const cliChatViewDistPath = join(rootDir, 'packages/cli/dist/chat/view.js');
 const dashboardDistPath = join(rootDir, 'packages/dashboard/dist/index.js');
 
 const assert = (condition, message) => {
@@ -66,6 +67,12 @@ const runCliJson = async ({ cwd, env, args, label }) => {
   assert(stderr.trim().length === 0, `${label} wrote to stderr: ${stderr.trim()}`);
   return parseJsonOutput(label, stdout);
 };
+
+const stripAnsi = (value) =>
+  value
+    .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/gu, '')
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/gu, '')
+    .replace(/\u001b[=>]/gu, '');
 
 const verifyCliOnboardingSmoke = async (tmpDir) => {
   await assertFile(cliDistPath, 'Built CLI is missing. Run pnpm build before pnpm verify:smoke.');
@@ -407,6 +414,79 @@ const verifyCliChatWorkflowSwitchSmoke = async (tmpDir) => {
   console.log('[PASS] Built CLI chat workflow switch smoke passed.');
 };
 
+const verifyCliChatTuiLayoutSmoke = async () => {
+  await assertFile(
+    cliChatViewDistPath,
+    'Built CLI chat view is missing. Run pnpm build before pnpm verify:smoke.',
+  );
+
+  const { renderChatView } = await import(pathToFileURL(cliChatViewDistPath).href);
+  const runSummary = {
+    executionId: 'exec-layout-1',
+    workflowName: 'layout-workflow',
+    status: 'completed',
+    startedAt: '2026-05-26T00:00:00.000Z',
+    endedAt: '2026-05-26T00:00:02.000Z',
+    durationMs: 2000,
+    completedStepCount: 0,
+    totalStepCount: 0,
+    message: 'Workflow completed: 0/0 steps completed.',
+    steps: [],
+  };
+  const locator = {
+    id: 'project:layout-workflow',
+    scope: 'project',
+    name: 'layout-workflow',
+    path: '/repo/.obora/workflows/layout.yaml',
+    displayPath: '.obora/workflows/layout.yaml',
+    editable: true,
+    sourceDir: '/repo/.obora/workflows',
+    stepCount: 0,
+    projectRoot: '/repo',
+  };
+  const lines = renderChatView(
+    {
+      sessionId: 'layout-session',
+      status: 'ready',
+      cwd: '/repo',
+      projectRoot: '/repo',
+      dryRun: true,
+      messages: [],
+      runChoices: [
+        {
+          runSummary,
+          sessionId: 'layout-session',
+          messageId: 'assistant:layout',
+          source: 'persisted',
+          runTask: 'inspect a very long run options display in the terminal history panel',
+          runWorkflowLocator: locator,
+          runOptions: {
+            provider: 'openrouter',
+            model: 'openrouter/owl-alpha',
+            config: '/repo/.obora/config.yaml',
+            agents: '/repo/agents.yaml',
+            policy: '/repo/policy.yaml',
+            timeout: 2500,
+          },
+        },
+      ],
+    },
+    { columns: 88 },
+  );
+  const plain = stripAnsi(lines.join('\n'));
+  assert(plain.includes('retry layout-workflow'), 'TUI run history must keep retry value visible');
+  assert(plain.includes('options provider openrouter'), 'TUI run history must show compact options');
+  assert(plain.includes('model openrouter/owl-alpha'), 'TUI run history must show the run model');
+  assert(plain.includes('timeout 2500ms'), 'TUI run history must show timeout metadata');
+  assert(plain.includes('files+3'), 'TUI run history must summarize file-backed options compactly');
+  assert(
+    !plain.includes('config /repo/.obora/config.yaml'),
+    'TUI run history must not expand long config paths',
+  );
+
+  console.log('[PASS] Built CLI chat TUI layout smoke passed.');
+};
+
 const withIsolatedDashboardEnv = async (fn) => {
   const keys = ['OBORA_HISTORY_DB_PATH', 'OBORA_RESUME_COMMAND', 'OBORA_DLQ_PATH'];
   const original = new Map(keys.map((key) => [key, process.env[key]]));
@@ -476,6 +556,7 @@ const main = async () => {
     await verifyCliChatOnceSmoke(tmpDir);
     await verifyCliChatRunHistorySmoke(tmpDir);
     await verifyCliChatWorkflowSwitchSmoke(tmpDir);
+    await verifyCliChatTuiLayoutSmoke();
     await verifyDashboardBootstrapSmoke(tmpDir);
     console.log('[PASS] Operational smoke completed successfully.');
   } finally {
