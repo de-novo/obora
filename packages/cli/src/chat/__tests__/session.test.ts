@@ -450,11 +450,29 @@ describe("chat session", () => {
   });
 
   it("reports when no latest run exists for the short details command", async () => {
-    const state = createInitialChatState({
-      sessionId: "session-a",
-      cwd: "/repo",
-      dryRun: true,
-    });
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      inspectedRunSummary: runSummary,
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      workflowChoices: [locator],
+      showHelpPanel: true,
+    };
 
     const opened = await handleChatInput({
       input: "/details",
@@ -465,6 +483,10 @@ describe("chat session", () => {
     });
 
     expect(opened.state.inspectedRunSummary).toBeUndefined();
+    expect(opened.state.runChoices).toBeUndefined();
+    expect(opened.state.sessionChoices).toBeUndefined();
+    expect(opened.state.workflowChoices).toBeUndefined();
+    expect(opened.state.showHelpPanel).toBeUndefined();
     expect(opened.state.messages.at(-1)?.content).toContain(
       "No run details are available yet."
     );

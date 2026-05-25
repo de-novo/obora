@@ -1205,7 +1205,7 @@ export const handleChatInput = async ({
         }
       : {
           state: appendAssistant(
-            state,
+            clearPanels(state),
             "No run details are available yet. Run a workflow first or use /runs to pick a persisted run."
           ),
           exit: false,
