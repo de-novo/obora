@@ -396,7 +396,7 @@ describe("renderChatView", () => {
     const plain = stripAnsi(output);
 
     expect(plain).toContain("› Choose /workflow 1 or run once with /run #1 <task>");
-    expect(plain).toContain("1  /workflow <name>  /run #1 <task>");
+    expect(plain).toContain("/workflow 1  /workflow <name>  /run #1 <task>");
     expect(plain).toContain("/workflows [scope]  /project  /clear");
   });
 
