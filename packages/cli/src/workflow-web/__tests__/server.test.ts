@@ -255,4 +255,38 @@ describe("workflow web bridge", () => {
       expect(saveResponse.status).toBe(403);
     });
   });
+
+  it("rejects saves when the locator path is outside its writable source root", async () => {
+    await withTempWorkflow(async ({ root, locator }) => {
+      const outsideDir = join(root, "outside");
+      const outsidePath = join(outsideDir, "external.yaml");
+      await mkdir(outsideDir, { recursive: true });
+      await writeWorkflow(outsidePath, "external");
+      const unsafeLocator: WorkflowLocator = {
+        ...locator,
+        id: "project:unsafe",
+        path: outsidePath,
+        displayPath: "outside/external.yaml",
+      };
+      const bridge = await startWorkflowWebBridge({
+        locator: unsafeLocator,
+        mode: "build",
+        open: false,
+      });
+      const payload = await fetch(`${bridge.apiBaseUrl}/api/workflow?token=${bridge.token}`).then(
+        (response) => response.json()
+      );
+      const saveResponse = await fetch(`${bridge.apiBaseUrl}/api/workflow?token=${bridge.token}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ yaml: "name: overwritten\nsteps: []\n", revision: payload.revision }),
+      });
+      const saved = await readFile(outsidePath, "utf-8");
+
+      await bridge.close();
+
+      expect(saveResponse.status).toBe(403);
+      expect(saved).toContain("name: external");
+    });
+  });
 });

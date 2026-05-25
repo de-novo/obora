@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
 import { readFile, stat, writeFile } from "node:fs/promises";
+import { isAbsolute, relative, resolve } from "node:path";
 import { stringify as stringifyYaml } from "yaml";
 
 import { discoverWorkflowLocators, readWorkflow, resolveWorkflowTarget } from "@obora/sdk";
@@ -49,6 +50,20 @@ const isWorkflowResolveScope = (value: unknown): value is WorkflowResolveScope =
 
 const isWorkflowResolveIntent = (value: unknown): value is WorkflowResolveIntent =>
   value === "view" || value === "build" || value === "run";
+
+const isPathInside = (root: string, path: string): boolean => {
+  const relativePath = relative(resolve(root), resolve(path));
+  return (
+    relativePath === "" ||
+    (relativePath.length > 0 && !relativePath.startsWith("..") && !isAbsolute(relativePath))
+  );
+};
+
+const locatorCanPersist = ({ locator, mode }: WorkflowWebBridgeOptions): boolean =>
+  mode === "build" &&
+  locator.editable &&
+  locator.scope !== "external" &&
+  isPathInside(locator.sourceDir, locator.path);
 
 const parseBodyAsRecord = async (request: IncomingMessage): Promise<Record<string, unknown>> => {
   const raw = await readRequestBody(request);
@@ -169,7 +184,7 @@ const handleApiRequest = async (
   }
 
   if (request.method === "PUT") {
-    if (options.mode !== "build" || !options.locator.editable) {
+    if (!locatorCanPersist(options)) {
       sendError(response, 403, "Workflow is read-only in this web session.");
       return;
     }
