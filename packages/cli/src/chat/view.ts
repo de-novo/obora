@@ -405,13 +405,15 @@ const renderSessionChoiceLine = (
 const renderSessionChoiceMeta = (
   summary: ChatSessionSummary,
   width: number
-): string =>
+): ReadonlyArray<string> => [
+  `${muted("project")} ${sessionProjectText(summary, Math.max(16, width - 12))}`,
   [
-    `${muted("project")} ${sessionProjectText(summary, Math.max(16, width - 28))}`,
     `${muted("tags")} ${sessionTagText(summary)}`,
+    `${muted("retry")} ${summary.lastRunTask && summary.lastRunWorkflowName ? summary.lastRunWorkflowName : "none"}`,
     `${muted("messages")} ${summary.messageCount}`,
     `${muted("updated")} ${formatUpdatedTime(summary.updatedAt)}`,
-  ].join("   ");
+  ].join("   "),
+];
 
 const renderSessionPicker = (
   state: ChatSessionState,
@@ -426,7 +428,7 @@ const renderSessionPicker = (
             `${muted("select")} /session 1   ${muted("rename")} /session rename 1 <id>   ${muted("delete")} /session delete 1   ${muted("close")} /clear`,
             ...state.sessionChoices.slice(0, 8).flatMap((summary, index) => [
               renderSessionChoiceLine(state, summary, index),
-              renderSessionChoiceMeta(summary, width - 4),
+              ...renderSessionChoiceMeta(summary, width - 4),
             ]),
           ],
           width

@@ -87,6 +87,8 @@ describe("renderChatView", () => {
         ],
         status: "ready",
         lastRunCommand: "obora run .obora/workflows/release-readiness.yaml",
+        lastRunTask: "perform the release check",
+        lastRunWorkflowLocator: locator,
         lastRunSummary: runSummary,
       },
       {
@@ -119,6 +121,7 @@ describe("renderChatView", () => {
     expect(plain).not.toContain("open /details exec-chat-1");
     expect(plain).not.toContain("viewing run exec-chat-1");
     expect(plain).toContain("last result completed 2/2");
+    expect(plain).toContain("retry release-readiness -> perform the release check");
     expect(plain).toContain("#1 release-readiness");
     expect(plain).toContain("#2 code-review");
     expect(plain).toContain("collect, handoff");
@@ -152,6 +155,8 @@ describe("renderChatView", () => {
               projectRoot: "/repo/project-a",
               tags: ["release"],
               workflowTarget: "release-readiness",
+              lastRunTask: "perform the release check",
+              lastRunWorkflowName: "release-readiness",
               messageCount: 5,
               updatedAt: "2026-05-24T10:11:12.000Z",
             },
@@ -180,6 +185,8 @@ describe("renderChatView", () => {
     expect(plain).toContain("○ #2 session-b idle no workflow");
     expect(plain).toContain("project /repo/project-a");
     expect(plain).toContain("tags release");
+    expect(plain).toContain("retry release-readiness");
+    expect(plain).toContain("retry none");
     expect(plain).toContain("updated 2026-05-24 10:11");
   });
 

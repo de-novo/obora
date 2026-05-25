@@ -12,6 +12,8 @@ export interface ChatSessionSummary {
   readonly projectRoot?: string;
   readonly tags: ReadonlyArray<string>;
   readonly workflowTarget?: string;
+  readonly lastRunTask?: string;
+  readonly lastRunWorkflowName?: string;
   readonly messageCount: number;
   readonly updatedAt: string;
 }
@@ -207,6 +209,10 @@ const toChatSessionSummary = (record: ChatSessionRecord): ChatSessionSummary => 
   ...(record.state.projectRoot ? { projectRoot: record.state.projectRoot } : {}),
   tags: record.state.tags ?? [],
   ...(record.state.workflowTarget ? { workflowTarget: record.state.workflowTarget } : {}),
+  ...(record.state.lastRunTask ? { lastRunTask: record.state.lastRunTask } : {}),
+  ...(record.state.lastRunWorkflowLocator
+    ? { lastRunWorkflowName: record.state.lastRunWorkflowLocator.name }
+    : {}),
   messageCount: record.state.messages.length,
   updatedAt: record.updatedAt,
 });

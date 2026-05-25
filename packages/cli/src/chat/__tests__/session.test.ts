@@ -1651,6 +1651,8 @@ describe("chat session", () => {
       workflowTarget: "release-readiness",
       workflowLocator: locator,
       lastRunCommand: "obora run .obora/workflows/release-readiness.yaml",
+      lastRunTask: "perform the release check",
+      lastRunWorkflowLocator: locator,
       lastRunSummary: {
         executionId: "exec-session-1",
         workflowName: "release-readiness",
@@ -1682,6 +1684,7 @@ describe("chat session", () => {
     expect(content).toContain("Workflow: release-readiness (project)");
     expect(content).toContain("Mode: dry-run");
     expect(content).toContain("Last run: obora run .obora/workflows/release-readiness.yaml");
+    expect(content).toContain("Retry: release-readiness -> perform the release check");
     expect(content).toContain("Last result: completed 1/1");
     expect(content).toContain("Details: /details exec-session-1");
   });
@@ -1792,6 +1795,8 @@ describe("chat session", () => {
         projectRoot: "/repo",
         tags: ["release"],
         workflowTarget: "release-readiness",
+        lastRunTask: "perform the release check",
+        lastRunWorkflowName: "release-readiness",
         messageCount: 5,
         updatedAt: "2026-05-24T00:00:00.000Z",
       },
@@ -1816,6 +1821,7 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("Recent sessions tagged release");
     expect(result.state.messages.at(-1)?.content).toContain("release-session");
     expect(result.state.messages.at(-1)?.content).toContain("release-readiness");
+    expect(result.state.messages.at(-1)?.content).toContain("retry release-readiness");
   });
 
   it("keeps chat open when session listing fails", async () => {

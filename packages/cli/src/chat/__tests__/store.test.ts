@@ -107,6 +107,8 @@ describe("chat session store", () => {
       projectRoot: join(cwd, "project-a"),
       tags: ["release", "urgent"],
       workflowTarget: "release-readiness",
+      lastRunTask: "perform the release check",
+      lastRunWorkflowName: "release-readiness",
     });
     await expect(listChatSessionSummaries({ cwd, tag: "release" })).resolves.toEqual([
       expect.objectContaining({ sessionId: "session-one", tags: ["release", "urgent"] }),

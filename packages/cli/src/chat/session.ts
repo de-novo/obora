@@ -616,6 +616,9 @@ const formatSessionSummaryLine = (summary: ChatSessionSummary): string =>
     `- ${summary.sessionId}`,
     summary.status,
     summary.workflowTarget ?? "no workflow",
+    summary.lastRunTask && summary.lastRunWorkflowName
+      ? `retry ${summary.lastRunWorkflowName}`
+      : "no retry",
     `${summary.messageCount} messages`,
     summary.tags.length > 0 ? `tags ${summary.tags.join(",")}` : "untagged",
   ].join(" · ");
@@ -652,6 +655,11 @@ const formatLastResult = (state: ChatSessionState): string =>
     ? `${state.lastRunSummary.status} ${state.lastRunSummary.completedStepCount}/${state.lastRunSummary.totalStepCount}`
     : "none";
 
+const formatRetryTarget = (state: ChatSessionState): string =>
+  state.lastRunTask && state.lastRunWorkflowLocator
+    ? `${state.lastRunWorkflowLocator.name} -> ${state.lastRunTask}`
+    : "none";
+
 const formatSessionStatusMessage = (state: ChatSessionState): string =>
   [
     `Session: ${state.sessionId}`,
@@ -666,6 +674,7 @@ const formatSessionStatusMessage = (state: ChatSessionState): string =>
     `Messages: ${state.messages.length}`,
     `User turns: ${userTurnCount(state)}`,
     `Last run: ${state.lastRunCommand ?? "none"}`,
+    `Retry: ${formatRetryTarget(state)}`,
     `Last result: ${formatLastResult(state)}`,
     ...(state.lastRunSummary ? [`Details: /details ${state.lastRunSummary.executionId}`] : []),
   ].join("\n");
