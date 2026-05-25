@@ -516,6 +516,11 @@ describe("chat command with workflow web saves", () => {
       const detail = JSON.parse(
         String(vi.mocked(console.log).mock.calls.at(-1)?.[0] ?? "{}")
       ) as unknown as ChatRunDetailJson;
+      await createCLI().parseAsync(
+        ["chat", "--show-run", "exec-chat-e2e", "--session", "run-session"],
+        { from: "user" }
+      );
+      const textDetail = String(vi.mocked(console.log).mock.calls.at(-1)?.[0] ?? "");
 
       expect(runs).toHaveLength(1);
       expect(runs.at(0)).toMatchObject({
@@ -543,6 +548,13 @@ describe("chat command with workflow web saves", () => {
         outputFormat: "json",
         dependencies: ["collect"],
       });
+      expect(textDetail).toContain("Message: assistant:run at 2026-05-25T09:00:02.000Z");
+      expect(textDetail).toContain("Workflow target: release-readiness");
+      expect(textDetail).toContain("Task: ship release");
+      expect(textDetail).toContain("Retry: release-readiness");
+      expect(textDetail).toContain(
+        "Workflow locator: release-readiness (.obora/workflows/release-readiness.yaml)"
+      );
     });
   });
 });
