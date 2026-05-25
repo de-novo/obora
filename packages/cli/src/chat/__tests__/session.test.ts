@@ -2128,12 +2128,31 @@ describe("chat session", () => {
   });
 
   it("does not delete the active chat session", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
     const deleteSession = vi.fn(async (_sessionId: string) => true);
-    const state = createInitialChatState({
-      sessionId: "session-a",
-      cwd: "/repo",
-      dryRun: true,
-    });
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      workflowChoices: [locator],
+      showHelpPanel: true,
+    };
 
     const result = await handleChatInput({
       input: "/session delete session-a",
@@ -2145,6 +2164,11 @@ describe("chat session", () => {
     });
 
     expect(deleteSession).not.toHaveBeenCalled();
+    expect(result.state.inspectedRunSummary).toBeUndefined();
+    expect(result.state.runChoices).toBeUndefined();
+    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.showHelpPanel).toBeUndefined();
     expect(result.state.messages.at(-1)?.content).toContain("Cannot delete the active session.");
   });
 
@@ -2215,12 +2239,31 @@ describe("chat session", () => {
   });
 
   it("reports missing chat sessions when deleting by id", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
     const deleteSession = vi.fn(async (_sessionId: string) => false);
-    const state = createInitialChatState({
-      sessionId: "session-a",
-      cwd: "/repo",
-      dryRun: true,
-    });
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      inspectedRunSummary: runSummary,
+      runChoices: chatRunChoicesFromSummaries([runSummary], "session-a"),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["triage"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      workflowChoices: [locator],
+      showHelpPanel: true,
+    };
 
     const result = await handleChatInput({
       input: "/session delete missing",
@@ -2232,6 +2275,11 @@ describe("chat session", () => {
     });
 
     expect(deleteSession).toHaveBeenCalledWith("missing");
+    expect(result.state.inspectedRunSummary).toBeUndefined();
+    expect(result.state.runChoices).toBeUndefined();
+    expect(result.state.sessionChoices).toBeUndefined();
+    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.showHelpPanel).toBeUndefined();
     expect(result.state.messages.at(-1)?.content).toContain("Chat session not found: missing");
   });
 
