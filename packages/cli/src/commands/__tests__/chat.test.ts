@@ -260,6 +260,12 @@ describe("chat command", () => {
       messageCreatedAt: "2026-05-24T00:00:01.000Z",
       workflowTarget: "release-readiness",
       runTask: "prepare release",
+      runOptions: {
+        provider: "openrouter",
+        model: "openrouter/owl-alpha",
+        config: "/repo/.obora/config.yaml",
+        timeout: 2500,
+      },
       runWorkflowLocator: {
         id: "project:release-readiness",
         scope: "project",
@@ -316,6 +322,11 @@ describe("chat command", () => {
     );
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Task: prepare release"));
     expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "Run options: provider openrouter · model openrouter/owl-alpha · config /repo/.obora/config.yaml · timeout 2500ms"
+      )
+    );
+    expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining("Workflow target: release-readiness")
     );
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Retry: release-readiness"));
@@ -364,6 +375,10 @@ describe("chat command", () => {
         messageCreatedAt: "2026-05-24T00:00:01.000Z",
         workflowTarget: "release-readiness",
         runTask: "prepare release",
+        runOptions: {
+          provider: "openrouter",
+          model: "openrouter/owl-alpha",
+        },
         runWorkflowLocator: {
           id: "project:release-readiness",
           scope: "project",
@@ -434,16 +449,19 @@ describe("chat command", () => {
         workflowName: "release-readiness",
         task: "prepare release",
         retry: "release-readiness",
+        options: "provider openrouter · model openrouter/owl-alpha",
       }),
       expect.objectContaining({
         executionId: "exec-old",
         task: "rerun old task",
         retry: "legacy-flow",
+        options: "default",
       }),
       expect.objectContaining({
         executionId: "exec-no-task",
         task: "-",
         retry: "-",
+        options: "default",
       }),
     ]);
   });

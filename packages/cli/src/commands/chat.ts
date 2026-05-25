@@ -2,6 +2,7 @@ import { Command } from "commander";
 
 import { runChatSession } from "../chat/session.js";
 import { formatChatRunDetail } from "../chat/run-detail-format.js";
+import { formatChatRunOptionsOrDefault } from "../chat/run-options-format.js";
 import { isRunStatusFilter, runStatusFilterUsage } from "../chat/run-status-filter.js";
 import {
   findChatRunDetail,
@@ -140,6 +141,7 @@ export function createChatCommand(): Command {
                   retry: detail.runTask
                     ? (detail.runWorkflowLocator?.name ?? detail.runSummary.workflowName)
                     : "-",
+                  options: formatChatRunOptionsOrDefault(detail.runOptions),
                   steps: `${detail.runSummary.completedStepCount}/${detail.runSummary.totalStepCount}`,
                   startedAt: detail.runSummary.startedAt,
                 }))

@@ -619,6 +619,12 @@ describe("renderChatView", () => {
               source: "persisted",
               runTask: "perform the release check",
               runWorkflowLocator: locator,
+              runOptions: {
+                provider: "openrouter",
+                model: "openrouter/owl-alpha",
+                config: "/repo/.obora/config.yaml",
+                timeout: 2500,
+              },
             },
             {
               runSummary: {
@@ -641,6 +647,11 @@ describe("renderChatView", () => {
     expect(plain).toContain("#1 exec-chat-1 completed release-readiness");
     expect(plain).toContain("task perform the release check");
     expect(plain).toContain("retry release-readiness");
+    expect(plain).toContain("options provider");
+    expect(plain).toContain("openrouter · model openrouter/owl-alpha");
+    expect(plain).toContain("config /repo/.obora/config.yaml");
+    expect(plain).toContain("timeout");
+    expect(plain).toContain("2500ms");
     expect(plain).toContain("#2 exec-chat-2 completed code-review");
     expect(plain).toContain("task -");
     expect(plain).toContain("retry none");

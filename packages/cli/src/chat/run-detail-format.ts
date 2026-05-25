@@ -1,5 +1,6 @@
 import type { WorkflowRunStepSummary } from "@obora/sdk";
 
+import { formatChatRunOptions } from "./run-options-format.js";
 import type { ChatRunDetail } from "./store.js";
 
 const values = (items: ReadonlyArray<string> | undefined): ReadonlyArray<string> => items ?? [];
@@ -46,6 +47,9 @@ export const formatChatRunDetail = (detail: ChatRunDetail): string =>
       ? []
       : [`Duration: ${detail.runSummary.durationMs}ms`]),
     ...(detail.runTask ? [`Task: ${detail.runTask}`] : []),
+    ...(formatChatRunOptions(detail.runOptions)
+      ? [`Run options: ${formatChatRunOptions(detail.runOptions)}`]
+      : []),
     ...(detail.workflowTarget ? [`Workflow target: ${detail.workflowTarget}`] : []),
     `Retry: ${detail.runTask && detail.runWorkflowLocator ? detail.runWorkflowLocator.name : "not available"}`,
     ...(detail.runWorkflowLocator
