@@ -796,6 +796,7 @@ const runChatTask = ({
             ...setChatStatus(runningState, "ready"),
             lastRunCommand,
             lastRunTask: message,
+            lastRunWorkflowLocator: workflowLocator,
             ...(runSummary ? { lastRunSummary: runSummary } : {}),
           },
           formatRunSummaryMessage(runSummary, commandOptions.dryRun),
@@ -812,6 +813,7 @@ const runChatTask = ({
             ...setChatStatus(runningState, "failed", failureMessage),
             lastRunCommand,
             lastRunTask: message,
+            lastRunWorkflowLocator: workflowLocator,
           },
           `Workflow run failed: ${failureMessage}`
         ),
@@ -942,10 +944,11 @@ export const handleChatInput = async ({
   }
 
   if (trimmed === "/retry") {
-    return state.workflowLocator && state.lastRunTask
+    const retryWorkflowLocator = state.lastRunWorkflowLocator ?? state.workflowLocator;
+    return retryWorkflowLocator && state.lastRunTask
       ? runChatTask({
           state,
-          workflowLocator: state.workflowLocator,
+          workflowLocator: retryWorkflowLocator,
           message: state.lastRunTask,
           runWorkflow,
           commandOptions,

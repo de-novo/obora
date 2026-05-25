@@ -276,10 +276,11 @@ describe("chat session", () => {
       })
     );
     expect(result.state.lastRunTask).toBe("perform the release check");
+    expect(result.state.lastRunWorkflowLocator).toBe(locator);
     expect(result.state.messages.at(-1)?.content).toContain("Workflow run completed");
   });
 
-  it("retries the last chat task with the current workflow", async () => {
+  it("retries the last chat task with the original workflow", async () => {
     vi.clearAllMocks();
     const selected = {
       ...createInitialChatState({
@@ -287,8 +288,9 @@ describe("chat session", () => {
         cwd: "/repo",
         dryRun: true,
       }),
-      workflowLocator: locator,
+      workflowLocator: codeReviewLocator,
       lastRunTask: "perform the release check",
+      lastRunWorkflowLocator: locator,
       status: "failed" as const,
     };
 
@@ -307,8 +309,31 @@ describe("chat session", () => {
       })
     );
     expect(result.state.lastRunTask).toBe("perform the release check");
+    expect(result.state.lastRunWorkflowLocator).toBe(locator);
     expect(result.state.messages.at(-2)?.content).toBe("perform the release check");
     expect(result.state.messages.at(-1)?.content).toContain("Dry-run completed");
+  });
+
+  it("explains retry when no previous chat task exists", async () => {
+    vi.clearAllMocks();
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/retry",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(result.state.messages.at(-1)?.content).toBe(
+      "Nothing to retry yet. Run a workflow task first with /run <task>."
+    );
   });
 
   it("runs a single chat task with an explicit workflow override", async () => {
@@ -345,6 +370,7 @@ describe("chat session", () => {
     expect(result.state.workflowLocator).toBe(locator);
     expect(result.state.workflowTarget).toBe("release-readiness");
     expect(result.state.lastRunCommand).toBe("obora run .obora/workflows/code-review.yaml");
+    expect(result.state.lastRunWorkflowLocator).toBe(codeReviewLocator);
     expect(result.state.messages.at(-2)?.content).toBe("review the recent CLI changes");
   });
 

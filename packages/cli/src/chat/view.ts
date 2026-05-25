@@ -207,6 +207,7 @@ const workflowLines = (state: ChatSessionState): ReadonlyArray<string> =>
 
 const activityLines = (state: ChatSessionState): ReadonlyArray<string> => [
   `${muted("last run")} ${state.lastRunCommand ?? "none"}`,
+  `${muted("retry")} ${state.lastRunTask && state.lastRunWorkflowLocator ? `${state.lastRunWorkflowLocator.name} -> ${state.lastRunTask}` : "none"}`,
   `${muted("last result")} ${state.lastRunSummary ? `${state.lastRunSummary.status} ${state.lastRunSummary.completedStepCount}/${state.lastRunSummary.totalStepCount}` : "none"}`,
   `${muted("error")} ${state.lastError ? red(state.lastError) : "none"}`,
   `${muted("turns")} ${state.messages.filter((message) => message.role === "user").length}`,

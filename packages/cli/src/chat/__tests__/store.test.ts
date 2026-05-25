@@ -58,6 +58,18 @@ describe("chat session store", () => {
         workflowTarget: "release-readiness",
       }),
       status: "ready" as const,
+      lastRunTask: "perform the release check",
+      lastRunWorkflowLocator: {
+        id: "project:release-readiness",
+        scope: "project" as const,
+        name: "release-readiness",
+        path: join(cwd, ".obora", "workflows", "release-readiness.yaml"),
+        displayPath: ".obora/workflows/release-readiness.yaml",
+        editable: true,
+        sourceDir: join(cwd, ".obora", "workflows"),
+        stepCount: 1,
+        projectRoot: join(cwd, "project-a"),
+      },
     };
     const second = {
       ...createInitialChatState({
@@ -80,6 +92,11 @@ describe("chat session store", () => {
       sessionId: "session-one",
       workflowTarget: "release-readiness",
       status: "ready",
+      lastRunTask: "perform the release check",
+      lastRunWorkflowLocator: {
+        name: "release-readiness",
+        displayPath: ".obora/workflows/release-readiness.yaml",
+      },
     });
     expect(summaries.map((summary) => summary.sessionId).sort()).toEqual([
       "session-one",
