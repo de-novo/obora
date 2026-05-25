@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { randomBytes } from "node:crypto";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
-import { stringify as stringifyYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import { discoverWorkflowLocators, readWorkflow, resolveWorkflowTarget } from "@obora/sdk";
 import type { WorkflowResolveIntent, WorkflowResolveRequest, WorkflowResolveScope } from "@obora/sdk";
@@ -103,6 +103,15 @@ const yamlFromSaveBody = (body: Record<string, unknown>): string =>
         sortMapEntries: false,
       });
 
+const validateWorkflowYamlForSave = (yaml: string): string | undefined => {
+  try {
+    const parsed = parseYaml(yaml) as unknown;
+    return isRecord(parsed) ? undefined : "Workflow YAML must be a mapping object.";
+  } catch (error) {
+    return `Workflow YAML could not be parsed: ${error instanceof Error ? error.message : String(error)}`;
+  }
+};
+
 const baseResolveRequest = (options: WorkflowWebBridgeOptions): WorkflowResolveRequest => ({
   ...(options.resolveRequest ?? {}),
   cwd: options.resolveRequest?.cwd ?? options.locator.projectRoot ?? process.cwd(),
@@ -201,7 +210,14 @@ const handleApiRequest = async (
       return;
     }
 
-    await writeFile(options.locator.path, yamlFromSaveBody(body), "utf-8");
+    const nextYaml = yamlFromSaveBody(body);
+    const validationError = validateWorkflowYamlForSave(nextYaml);
+    if (validationError) {
+      sendError(response, 422, validationError);
+      return;
+    }
+
+    await writeFile(options.locator.path, nextYaml, "utf-8");
     sendJson(response, 200, await responseForWorkflow(options));
     return;
   }

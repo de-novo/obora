@@ -215,6 +215,35 @@ describe("workflow web bridge", () => {
     });
   });
 
+  it("rejects saves that are not parseable workflow YAML mappings", async () => {
+    await withTempWorkflow(async ({ path, locator }) => {
+      const bridge = await startWorkflowWebBridge({ locator, mode: "build", open: false });
+      const payload = await fetch(`${bridge.apiBaseUrl}/api/workflow?token=${bridge.token}`).then(
+        (response) => response.json()
+      );
+      const malformedResponse = await fetch(
+        `${bridge.apiBaseUrl}/api/workflow?token=${bridge.token}`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ yaml: "name: [broken\n", revision: payload.revision }),
+        }
+      );
+      const scalarResponse = await fetch(`${bridge.apiBaseUrl}/api/workflow?token=${bridge.token}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ yaml: "just-a-string\n", revision: payload.revision }),
+      });
+      const saved = await readFile(path, "utf-8");
+
+      await bridge.close();
+
+      expect(malformedResponse.status).toBe(422);
+      expect(scalarResponse.status).toBe(422);
+      expect(saved).toContain("name: release-readiness");
+    });
+  });
+
   it("resolves waitUntilClosed when the bridge is closed", async () => {
     await withTempWorkflow(async ({ locator }) => {
       const bridge = await startWorkflowWebBridge({ locator, mode: "build", open: false });
