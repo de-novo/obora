@@ -1406,6 +1406,19 @@ describe("chat session", () => {
           source: "persisted",
         },
       ],
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo/project-a",
+          tags: ["ops"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+      showHelpPanel: true,
     };
 
     const shown = await handleChatInput({
@@ -1431,6 +1444,8 @@ describe("chat session", () => {
     expect(updated.state.workflowChoices).toEqual([]);
     expect(updated.state.inspectedRunSummary).toBeUndefined();
     expect(updated.state.runChoices).toBeUndefined();
+    expect(updated.state.sessionChoices).toBeUndefined();
+    expect(updated.state.showHelpPanel).toBeUndefined();
     expect(updated.state.messages.at(-1)?.content).toContain(
       "Project root updated: /repo/packages/cli"
     );

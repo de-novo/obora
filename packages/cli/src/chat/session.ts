@@ -579,6 +579,8 @@ const withProjectRoot = (state: ChatSessionState, projectRoot: string): ChatSess
   workflowChoices: [],
   inspectedRunSummary: undefined,
   runChoices: undefined,
+  sessionChoices: undefined,
+  showHelpPanel: undefined,
   lastError: undefined,
 });
 
