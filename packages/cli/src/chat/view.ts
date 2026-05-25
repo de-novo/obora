@@ -237,13 +237,18 @@ const attentionSteps = (
     );
 
 const runDetailAttentionLines = (summary: WorkflowRunSummary): ReadonlyArray<string> =>
-  attentionSteps(summary).flatMap(([step, index]) => [
-    `${muted("attention")} #${index + 1} ${step.name} ${step.status}`,
-    ...(stepValues(step.issues).length > 0
-      ? [`${muted("cause")} ${stepValues(step.issues).join("; ")}`]
+  [
+    ...attentionSteps(summary).flatMap(([step, index]) => [
+      `${muted("attention")} #${index + 1} ${step.name} ${step.status}`,
+      ...(stepValues(step.issues).length > 0
+        ? [`${muted("cause")} ${stepValues(step.issues).join("; ")}`]
+        : []),
+      `${muted("hint")} ${step.outputPreview}`,
+    ]),
+    ...(attentionSteps(summary).length > 0
+      ? [`${muted("next")} /run <task> after fixing inputs   ${muted("history")} /runs`]
       : []),
-    `${muted("hint")} ${step.outputPreview}`,
-  ]);
+  ];
 
 const runDetailStepLines = (
   step: WorkflowRunStepSummary,
