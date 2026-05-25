@@ -3583,6 +3583,30 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("Selected workflow code-review");
   });
 
+  it("keeps listed workflow choices when a numbered workflow choice is missing", async () => {
+    vi.clearAllMocks();
+    const listed = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      workflowChoices: [locator],
+    };
+
+    const result = await handleChatInput({
+      input: "/workflow 2",
+      state: listed,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(resolveWorkflow).not.toHaveBeenCalled();
+    expect(result.state.workflowChoices).toEqual([locator]);
+    expect(result.state.messages.at(-1)?.content).toContain("Workflow choice not found.");
+  });
+
   it("resolves workflow names against the session project root", async () => {
     vi.clearAllMocks();
     const resolveWorkflowForProject = vi.fn(async (_target: string, _projectRoot?: string) => locator);

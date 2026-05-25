@@ -1483,6 +1483,15 @@ export const handleChatInput = async ({
         exit: false,
       };
     }
+    if (choiceIndex !== undefined) {
+      return {
+        state: appendAssistant(
+          withWorkflowChoicesOnly(state),
+          "Workflow choice not found. Run /workflows first, then use /workflow 1."
+        ),
+        exit: false,
+      };
+    }
     const resolvingState = setChatStatus(state, "resolving");
     return resolveWorkflow(workflowTarget, state.projectRoot)
       .then((locator): ChatTurnResult => ({
