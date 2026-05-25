@@ -1094,6 +1094,8 @@ describe("chat session", () => {
       sessionId: "session-a",
       messageId: "assistant:run",
       messageCreatedAt: "2026-05-21T00:00:02.000Z",
+      runTask: "perform the release check",
+      runWorkflowLocator: locator,
       runSummary,
     }));
     const state = createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true });
@@ -1109,16 +1111,38 @@ describe("chat session", () => {
 
     expect(findRun).toHaveBeenCalledWith("exec-chat-1");
     expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
+    expect(opened.state.lastRunTask).toBe("perform the release check");
+    expect(opened.state.lastRunWorkflowLocator).toBe(locator);
     expect(opened.state.runChoices?.[0]).toMatchObject({
       sessionId: "session-a",
       messageId: "assistant:run",
       source: "persisted",
+      runTask: "perform the release check",
+      runWorkflowLocator: { name: "release-readiness" },
       runSummary: { executionId: "exec-chat-1" },
     });
     expect(opened.state.messages.at(-1)?.content).toContain("Opened run details exec-chat-1.");
     expect(opened.state.messages.at(-1)?.content).toContain(
       "Use /session session-a to switch to the source session."
     );
+    expect(opened.state.messages.at(-1)?.content).toContain("Use /retry to rerun this task.");
+
+    vi.clearAllMocks();
+    const retried = await handleChatInput({
+      input: "/retry",
+      state: opened.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflow).toHaveBeenCalledWith(
+      locator.path,
+      expect.objectContaining({
+        input: expect.stringContaining("perform the release check"),
+      })
+    );
+    expect(retried.state.lastRunWorkflowLocator).toBe(locator);
   });
 
   it("does not query persisted run details when a memory summary matches", async () => {

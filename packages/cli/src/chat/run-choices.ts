@@ -8,6 +8,8 @@ export interface ChatRunChoiceDetailInput {
   readonly sessionId: string;
   readonly messageId: string;
   readonly runSummary: WorkflowRunSummary;
+  readonly runTask?: ChatRunChoice["runTask"];
+  readonly runWorkflowLocator?: ChatRunChoice["runWorkflowLocator"];
 }
 
 const hasRunSummary = (choice: ChatRunChoiceInput): choice is ChatRunChoice =>
@@ -39,6 +41,8 @@ export const chatRunChoiceFromDetail = (detail: ChatRunChoiceDetailInput): ChatR
   sessionId: detail.sessionId,
   messageId: detail.messageId,
   source: "persisted",
+  ...(detail.runTask ? { runTask: detail.runTask } : {}),
+  ...(detail.runWorkflowLocator ? { runWorkflowLocator: detail.runWorkflowLocator } : {}),
 });
 
 export const chatRunChoicesFromDetails = (

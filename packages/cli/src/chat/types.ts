@@ -18,6 +18,8 @@ export interface ChatRunChoice {
   readonly sessionId?: string;
   readonly messageId?: string;
   readonly source?: string;
+  readonly runTask?: string;
+  readonly runWorkflowLocator?: WorkflowLocator;
 }
 
 export interface ChatSessionState {

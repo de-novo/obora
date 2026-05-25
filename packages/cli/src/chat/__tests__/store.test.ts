@@ -228,6 +228,18 @@ describe("chat session store", () => {
         dryRun: false,
         workflowTarget: "release-readiness",
       }),
+      lastRunTask: "perform the release check",
+      lastRunWorkflowLocator: {
+        id: "project:release-readiness",
+        scope: "project" as const,
+        name: "release-readiness",
+        path: join(cwd, ".obora", "workflows", "release-readiness.yaml"),
+        displayPath: ".obora/workflows/release-readiness.yaml",
+        editable: true,
+        sourceDir: join(cwd, ".obora", "workflows"),
+        stepCount: 1,
+        projectRoot: cwd,
+      },
       lastRunSummary: lastRun,
       messages: [
         {
@@ -258,6 +270,8 @@ describe("chat session store", () => {
       findChatRunDetail({ cwd, executionId: "exec-last" })
     ).resolves.toMatchObject({
       messageId: "state:lastRunSummary",
+      runTask: "perform the release check",
+      runWorkflowLocator: { name: "release-readiness" },
       runSummary: { executionId: "exec-last" },
     });
   });

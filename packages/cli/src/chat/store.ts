@@ -1,7 +1,7 @@
 import { mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { WorkflowRunSummary } from "@obora/sdk";
+import type { WorkflowLocator, WorkflowRunSummary } from "@obora/sdk";
 
 import type { ChatMessage, ChatSessionState } from "./types.js";
 
@@ -30,6 +30,8 @@ export interface ChatRunDetail {
   readonly messageId: string;
   readonly messageCreatedAt: string;
   readonly workflowTarget?: string;
+  readonly runTask?: string;
+  readonly runWorkflowLocator?: WorkflowLocator;
   readonly runSummary: WorkflowRunSummary;
 }
 
@@ -321,6 +323,19 @@ const chatRunDetailFromState =
       .filter((detail) => detail.runSummary.executionId === executionId)
       .at(0);
 
+const retryContextForRunSummary = (
+  state: ChatSessionState,
+  summary: WorkflowRunSummary
+): Pick<ChatRunDetail, "runTask" | "runWorkflowLocator"> =>
+  state.lastRunSummary?.executionId === summary.executionId &&
+  state.lastRunTask &&
+  state.lastRunWorkflowLocator
+    ? {
+        runTask: state.lastRunTask,
+        runWorkflowLocator: state.lastRunWorkflowLocator,
+      }
+    : {};
+
 const syntheticRunDetail = (
   state: ChatSessionState,
   summary: WorkflowRunSummary,
@@ -330,6 +345,7 @@ const syntheticRunDetail = (
   messageId: source,
   messageCreatedAt: summary.startedAt,
   ...(state.workflowTarget ? { workflowTarget: state.workflowTarget } : {}),
+  ...retryContextForRunSummary(state, summary),
   runSummary: summary,
 });
 
@@ -355,6 +371,7 @@ const chatRunDetailsFromState = (state: ChatSessionState): ReadonlyArray<ChatRun
               messageId: message.id,
               messageCreatedAt: message.createdAt,
               ...(state.workflowTarget ? { workflowTarget: state.workflowTarget } : {}),
+              ...retryContextForRunSummary(state, message.runSummary),
               runSummary: message.runSummary,
             },
           ]

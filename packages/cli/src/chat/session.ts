@@ -339,9 +339,12 @@ const openedRunDetailsMessage = (
   persistedDetail: ChatRunDetail | undefined
 ): string => {
   const sessionId = choice?.sessionId ?? persistedDetail?.sessionId;
-  return sessionId
-    ? `Opened run details ${summary.executionId}. Use /session ${sessionId} to switch to the source session.`
-    : `Opened run details ${summary.executionId}.`;
+  const retryTask = choice?.runTask ?? persistedDetail?.runTask;
+  const sourceMessage = sessionId
+    ? ` Use /session ${sessionId} to switch to the source session.`
+    : "";
+  const retryMessage = retryTask ? " Use /retry to rerun this task." : "";
+  return `Opened run details ${summary.executionId}.${sourceMessage}${retryMessage}`;
 };
 
 const clearPanels = (state: ChatSessionState): ChatSessionState =>
@@ -523,6 +526,23 @@ const withInspectedRunSummary = (
   workflowChoices: undefined,
   showHelpPanel: undefined,
 });
+
+const withRetryContextFromRunDetail = (
+  state: ChatSessionState,
+  choice: ChatRunChoice | undefined,
+  persistedDetail: ChatRunDetail | undefined
+): ChatSessionState => {
+  const runTask = choice?.runTask ?? persistedDetail?.runTask;
+  const runWorkflowLocator = choice?.runWorkflowLocator ?? persistedDetail?.runWorkflowLocator;
+  return runTask && runWorkflowLocator
+    ? {
+        ...state,
+        lastRunTask: runTask,
+        lastRunWorkflowLocator: runWorkflowLocator,
+        lastRunCommand: `obora run ${runWorkflowLocator.displayPath}`,
+      }
+    : state;
+};
 
 const sessionChoiceIndexFromTarget = (target: string): number | undefined =>
   /^\d+$/u.test(target) ? Number.parseInt(target, 10) - 1 : undefined;
@@ -1266,7 +1286,11 @@ export const handleChatInput = async ({
     return summary
       ? {
           state: appendAssistant(
-            withInspectedRunSummary(state, summary),
+            withRetryContextFromRunDetail(
+              withInspectedRunSummary(state, summary),
+              choice,
+              undefined
+            ),
             openedRunDetailsMessage(summary, choice, undefined)
           ),
           exit: false,
@@ -1298,7 +1322,13 @@ export const handleChatInput = async ({
       : (state.runChoices ?? []);
     return {
       state: appendAssistant(
-        summary ? withInspectedRunSummary(state, summary, runChoices) : clearPanels(state),
+        summary
+          ? withRetryContextFromRunDetail(
+              withInspectedRunSummary(state, summary, runChoices),
+              choice,
+              persistedDetail
+            )
+          : clearPanels(state),
         summary
           ? openedRunDetailsMessage(summary, choice, persistedDetail)
           : `Run details not found: ${detailsExecutionId}`
