@@ -1233,6 +1233,7 @@ describe("chat session", () => {
 
   it("shows and updates the session project root", async () => {
     vi.clearAllMocks();
+    const runSummary = buildWorkflowRunSummary(executionResult);
     const selected = {
       ...createInitialChatState({
         sessionId: "session-a",
@@ -1243,6 +1244,15 @@ describe("chat session", () => {
       workflowTarget: "release-readiness",
       workflowLocator: locator,
       workflowChoices: [locator],
+      inspectedRunSummary: runSummary,
+      runChoices: [
+        {
+          runSummary,
+          sessionId: "session-a",
+          messageId: "assistant:run",
+          source: "persisted",
+        },
+      ],
     };
 
     const shown = await handleChatInput({
@@ -1266,6 +1276,8 @@ describe("chat session", () => {
     expect(updated.state.workflowTarget).toBeUndefined();
     expect(updated.state.workflowLocator).toBeUndefined();
     expect(updated.state.workflowChoices).toEqual([]);
+    expect(updated.state.inspectedRunSummary).toBeUndefined();
+    expect(updated.state.runChoices).toBeUndefined();
     expect(updated.state.messages.at(-1)?.content).toContain(
       "Project root updated: /repo/packages/cli"
     );
