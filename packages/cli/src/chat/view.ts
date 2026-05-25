@@ -223,13 +223,48 @@ const renderMeta = (state: ChatSessionState, width: number): ReadonlyArray<strin
 const inspectedRunSummary = (state: ChatSessionState): WorkflowRunSummary | undefined =>
   state.inspectedRunSummary;
 
-const runDetailHeaderLines = (summary: WorkflowRunSummary): ReadonlyArray<string> => [
-  `${muted("id")} ${summary.executionId}   ${muted("status")} ${summary.status}   ${muted("steps")} ${summary.completedStepCount}/${summary.totalStepCount}`,
-  `${muted("workflow")} ${summary.workflowName}   ${formatRunDuration(summary)}`,
-  `${muted("summary")} ${summary.message}`,
-  `${muted("open")} /details ${summary.executionId}`,
-  ...(summary.error ? [`${muted("error")} ${red(summary.error)}`] : []),
-];
+const inspectedRunChoice = (
+  state: ChatSessionState,
+  summary: WorkflowRunSummary
+): ChatRunChoice | undefined =>
+  state.runChoices?.find((choice) => runChoiceSummary(choice).executionId === summary.executionId);
+
+const inspectedRunTask = (
+  state: ChatSessionState,
+  summary: WorkflowRunSummary,
+  choice: ChatRunChoice | undefined
+): string | undefined =>
+  choice?.runTask ??
+  (state.lastRunSummary?.executionId === summary.executionId ? state.lastRunTask : undefined);
+
+const inspectedRunWorkflow = (
+  state: ChatSessionState,
+  summary: WorkflowRunSummary,
+  choice: ChatRunChoice | undefined
+): WorkflowLocator | undefined =>
+  choice?.runWorkflowLocator ??
+  (state.lastRunSummary?.executionId === summary.executionId
+    ? state.lastRunWorkflowLocator
+    : undefined);
+
+const runDetailHeaderLines = (
+  state: ChatSessionState,
+  summary: WorkflowRunSummary
+): ReadonlyArray<string> => {
+  const choice = inspectedRunChoice(state, summary);
+  const task = inspectedRunTask(state, summary, choice);
+  const workflow = inspectedRunWorkflow(state, summary, choice);
+  return [
+    `${muted("id")} ${summary.executionId}   ${muted("status")} ${summary.status}   ${muted("steps")} ${summary.completedStepCount}/${summary.totalStepCount}`,
+    `${muted("workflow")} ${summary.workflowName}   ${formatRunDuration(summary)}`,
+    `${muted("task")} ${task ? formatRunTaskPreview(task) : "-"}`,
+    `${muted("retry")} ${task && workflow ? workflow.name : "none"}   ${muted("project")} ${compactPath(state.projectRoot ?? state.cwd, 52)}`,
+    ...(workflow ? [`${muted("path")} ${compactPath(workflow.displayPath, 72)}`] : []),
+    `${muted("summary")} ${summary.message}`,
+    `${muted("open")} /details ${summary.executionId}`,
+    ...(summary.error ? [`${muted("error")} ${red(summary.error)}`] : []),
+  ];
+};
 
 const attentionSteps = (
   summary: WorkflowRunSummary
@@ -285,7 +320,7 @@ const renderRunInspector = (
         ...card(
           "run details",
           [
-            ...runDetailHeaderLines(summary),
+            ...runDetailHeaderLines(state, summary),
             ...runDetailAttentionLines(summary),
             "",
             ...summary.steps.flatMap(runDetailStepLines),

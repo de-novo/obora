@@ -458,6 +458,20 @@ describe("renderChatView", () => {
           }),
           lastRunSummary: runSummary,
           inspectedRunSummary: inspectedSummary,
+          runChoices: [
+            {
+              runSummary: inspectedSummary,
+              sessionId: "session-a",
+              messageId: "assistant:inspected",
+              source: "persisted",
+              runTask: "summarize the current diff and explain risk",
+              runWorkflowLocator: {
+                ...locator,
+                name: "code-review",
+                displayPath: ".obora/workflows/code-review.yaml",
+              },
+            },
+          ],
         },
         { columns: 120 }
       )
@@ -466,9 +480,13 @@ describe("renderChatView", () => {
 
     expect(plain).toContain("id exec-inspected");
     expect(plain).toContain("workflow code-review");
+    expect(plain).toContain("task summarize the current diff and explain risk");
+    expect(plain).toContain("retry code-review");
+    expect(plain).toContain("project /repo");
+    expect(plain).toContain("path .obora/workflows/code-review.yaml");
     expect(plain).toContain("viewing run exec-inspected");
     expect(plain).toContain("viewing run exec-inspected  ·  /details exec-inspected");
-    expect(plain).toContain("/clear  /runs  /details <runId>");
+    expect(plain).toContain("/clear  1  /details <runId>");
     expect(plain).toContain("#1 review completed");
     expect(plain).toContain("format text");
     expect(plain).toContain("method Direct repository inspection");
