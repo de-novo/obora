@@ -127,6 +127,73 @@ const verifyCliOnboardingSmoke = async (tmpDir) => {
   console.log('[PASS] Built CLI onboarding smoke passed.');
 };
 
+const verifyCliChatOnceSmoke = async (tmpDir) => {
+  const homeDir = join(tmpDir, 'chat-home');
+  await mkdir(homeDir, { recursive: true });
+  const env = createSmokeEnv(homeDir);
+  const projectDir = join(tmpDir, 'chat-project');
+  const sessionId = 'smoke-chat-session';
+  const chatTask = 'Add a concise usage note after inspecting the project files';
+
+  await runCliJson({
+    cwd: tmpDir,
+    env,
+    label: 'obora quickstart --json for chat smoke',
+    args: ['--json', 'quickstart', projectDir],
+  });
+
+  const finalState = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --once --dry-run --json',
+    args: ['--json', 'chat', 'judge.yaml', '--dry-run', '--session', sessionId, '--once', chatTask],
+  });
+  assert(finalState.sessionId === sessionId, 'chat once JSON must preserve the requested session id');
+  assert(finalState.status === 'ready', 'chat once dry-run must leave the session ready');
+  assert(finalState.workflowLocator?.name === 'quickstart-judge', 'chat once must resolve judge.yaml');
+  assert(finalState.lastRunTask === chatTask, 'chat once must treat the input message as the task source');
+  assert(
+    finalState.lastRunCommand === 'obora run judge.yaml',
+    'chat once must record the executable workflow command',
+  );
+  assert(
+    finalState.messages?.some?.(
+      (message) => message.role === 'user' && message.content === chatTask,
+    ) === true,
+    'chat once must persist the user task as a chat message',
+  );
+
+  const sessions = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --list-sessions --json',
+    args: ['--json', 'chat', '--list-sessions'],
+  });
+  assert(Array.isArray(sessions), 'chat session list must return an array');
+  assert(
+    sessions.some((session) => session.sessionId === sessionId && session.lastRunTask === chatTask),
+    'chat session list must include the saved once session and task',
+  );
+
+  const persistedState = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --show-session --json',
+    args: ['--json', 'chat', '--show-session', '--session', sessionId],
+  });
+  assert(persistedState.sessionId === sessionId, 'show-session must load the saved chat session');
+  assert(
+    persistedState.lastRunWorkflowLocator?.name === 'quickstart-judge',
+    'show-session must preserve the retry workflow locator',
+  );
+  assert(
+    persistedState.lastRunTask === chatTask,
+    'show-session must preserve the original chat task',
+  );
+
+  console.log('[PASS] Built CLI chat once smoke passed.');
+};
+
 const withIsolatedDashboardEnv = async (fn) => {
   const keys = ['OBORA_HISTORY_DB_PATH', 'OBORA_RESUME_COMMAND', 'OBORA_DLQ_PATH'];
   const original = new Map(keys.map((key) => [key, process.env[key]]));
@@ -193,6 +260,7 @@ const main = async () => {
   const tmpDir = await mkdtemp(join(tmpdir(), 'obora-operational-smoke-'));
   try {
     await verifyCliOnboardingSmoke(tmpDir);
+    await verifyCliChatOnceSmoke(tmpDir);
     await verifyDashboardBootstrapSmoke(tmpDir);
     console.log('[PASS] Operational smoke completed successfully.');
   } finally {
