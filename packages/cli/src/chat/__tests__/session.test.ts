@@ -2854,7 +2854,10 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("Recent sessions tagged release");
     expect(result.state.messages.at(-1)?.content).toContain("release-session");
     expect(result.state.messages.at(-1)?.content).toContain("release-readiness");
-    expect(result.state.messages.at(-1)?.content).toContain("retry release-readiness");
+    expect(result.state.messages.at(-1)?.content).toContain("project /repo");
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "retry release-readiness -> perform the release check"
+    );
   });
 
   it("keeps chat open when session listing fails", async () => {

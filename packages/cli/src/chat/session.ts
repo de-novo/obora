@@ -911,8 +911,9 @@ const formatSessionSummaryLine = (summary: ChatSessionSummary): string =>
     `- ${summary.sessionId}`,
     summary.status,
     summary.workflowTarget ?? "no workflow",
+    `project ${summary.projectRoot ?? summary.cwd}`,
     summary.lastRunTask && summary.lastRunWorkflowName
-      ? `retry ${summary.lastRunWorkflowName}`
+      ? `retry ${summary.lastRunWorkflowName} -> ${summary.lastRunTask}`
       : "no retry",
     `${summary.messageCount} messages`,
     summary.tags.length > 0 ? `tags ${summary.tags.join(",")}` : "untagged",

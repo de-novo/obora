@@ -186,9 +186,31 @@ describe("renderChatView", () => {
     expect(plain).toContain("○ #2 session-b idle no workflow");
     expect(plain).toContain("project /repo/project-a");
     expect(plain).toContain("tags release");
-    expect(plain).toContain("retry release-readiness");
+    expect(plain).toContain("retry release-readiness -> perform the release check");
     expect(plain).toContain("retry none");
     expect(plain).toContain("updated 2026-05-24 10:11");
+  });
+
+  it("renders old session retry metadata without a resolved workflow locator", () => {
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-a",
+            cwd: "/repo",
+            projectRoot: "/repo/project-a",
+            dryRun: true,
+          }),
+          lastRunTask: "perform the release check",
+          lastRunSummary: runSummary,
+        },
+        { columns: 120 }
+      )
+    );
+    const plain = stripAnsi(output);
+
+    expect(plain).toContain("retry release-readiness -> perform the release check");
+    expect(plain).not.toContain("retry none");
   });
 
   it("renders numbered workflow choices as a picker panel", () => {

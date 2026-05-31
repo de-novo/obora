@@ -123,6 +123,12 @@ const formatRunDuration = (summary: WorkflowRunSummary): string =>
 const formatRunTaskPreview = (task: string | undefined): string =>
   task ? fit(normalizeText(task), 46) : "-";
 
+const formatRetryTarget = (
+  workflowName: string | undefined,
+  task: string | undefined
+): string =>
+  workflowName && task ? `${workflowName} -> ${formatRunTaskPreview(task)}` : "none";
+
 const formatStepNames = (summary: WorkflowRunSummary): string =>
   summary.steps.map((step) => step.name).join(", ");
 
@@ -211,7 +217,10 @@ const workflowLines = (state: ChatSessionState): ReadonlyArray<string> =>
 
 const activityLines = (state: ChatSessionState): ReadonlyArray<string> => [
   `${muted("last run")} ${state.lastRunCommand ?? "none"}`,
-  `${muted("retry")} ${state.lastRunTask && state.lastRunWorkflowLocator ? `${state.lastRunWorkflowLocator.name} -> ${state.lastRunTask}` : "none"}`,
+  `${muted("retry")} ${formatRetryTarget(
+    state.lastRunWorkflowLocator?.name ?? state.lastRunSummary?.workflowName,
+    state.lastRunTask
+  )}`,
   `${muted("last result")} ${state.lastRunSummary ? `${state.lastRunSummary.status} ${state.lastRunSummary.completedStepCount}/${state.lastRunSummary.totalStepCount}` : "none"}`,
   `${muted("error")} ${state.lastError ? red(state.lastError) : "none"}`,
   `${muted("turns")} ${state.messages.filter((message) => message.role === "user").length}`,
@@ -499,7 +508,9 @@ const renderSessionChoiceMeta = (
   `${muted("project")} ${sessionProjectText(summary, Math.max(16, width - 12))}`,
   [
     `${muted("tags")} ${sessionTagText(summary)}`,
-    `${muted("retry")} ${summary.lastRunTask && summary.lastRunWorkflowName ? summary.lastRunWorkflowName : "none"}`,
+    `${muted("retry")} ${formatRetryTarget(summary.lastRunWorkflowName, summary.lastRunTask)}`,
+  ].join("   "),
+  [
     `${muted("messages")} ${summary.messageCount}`,
     `${muted("updated")} ${formatUpdatedTime(summary.updatedAt)}`,
   ].join("   "),
