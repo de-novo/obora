@@ -488,6 +488,9 @@ const sessionWorkflowText = (summary: ChatSessionSummary): string =>
 const sessionProjectText = (summary: ChatSessionSummary, width: number): string =>
   compactPath(summary.projectRoot ?? summary.cwd, width);
 
+const sessionRetryState = (summary: ChatSessionSummary): string =>
+  summary.lastRunTask && summary.lastRunWorkflowName ? green("retryable") : muted("no-retry");
+
 const renderSessionChoiceLine = (
   state: ChatSessionState,
   summary: ChatSessionSummary,
@@ -499,13 +502,19 @@ const renderSessionChoiceLine = (
     bold(summary.sessionId),
     statusPill(summary.status),
     muted(sessionWorkflowText(summary)),
+    sessionRetryState(summary),
   ].join(" ");
 
 const renderSessionChoiceMeta = (
   summary: ChatSessionSummary,
+  index: number,
   width: number
 ): ReadonlyArray<string> => [
+  `${muted("open")} /session ${index + 1}`,
   `${muted("project")} ${sessionProjectText(summary, Math.max(16, width - 12))}`,
+  ...(summary.lastRunTask
+    ? [`${muted("last task")} ${formatRunTaskPreview(summary.lastRunTask)}`]
+    : []),
   [
     `${muted("tags")} ${sessionTagText(summary)}`,
     `${muted("retry")} ${formatRetryTarget(summary.lastRunWorkflowName, summary.lastRunTask)}`,
@@ -529,7 +538,7 @@ const renderSessionPicker = (
             `${muted("select")} /session 1   ${muted("rename")} /session rename 1 <id>   ${muted("delete")} /session delete 1   ${muted("close")} /clear`,
             ...state.sessionChoices.slice(0, 8).flatMap((summary, index) => [
               renderSessionChoiceLine(state, summary, index),
-              ...renderSessionChoiceMeta(summary, width - 4),
+              ...renderSessionChoiceMeta(summary, index, width - 4),
             ]),
           ],
           width

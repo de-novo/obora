@@ -184,11 +184,56 @@ describe("renderChatView", () => {
     expect(plain).toContain("close /clear");
     expect(plain).toContain("● #1 session-a ready release-readiness");
     expect(plain).toContain("○ #2 session-b idle no workflow");
+    expect(plain).toContain("release-readiness retryable");
+    expect(plain).toContain("no workflow no-retry");
+    expect(plain).toContain("open /session 1");
+    expect(plain).toContain("open /session 2");
     expect(plain).toContain("project /repo/project-a");
+    expect(plain).toContain("last task perform the release check");
     expect(plain).toContain("tags release");
     expect(plain).toContain("retry release-readiness -> perform the release check");
     expect(plain).toContain("retry none");
     expect(plain).toContain("updated 2026-05-24 10:11");
+  });
+
+  it("keeps session picker actions and retry metadata readable in narrow terminals", () => {
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-a",
+            cwd: "/repo",
+            projectRoot: "/repo/project-a",
+            dryRun: true,
+          }),
+          sessionChoices: [
+            {
+              sessionId: "session-with-a-very-long-name",
+              status: "ready",
+              cwd: "/repo",
+              projectRoot: "/repo/project-a",
+              tags: ["release", "qa"],
+              workflowTarget: "release-readiness",
+              lastRunTask:
+                "perform the release check and produce a concise final handoff summary",
+              lastRunWorkflowName: "release-readiness",
+              messageCount: 12,
+              updatedAt: "2026-05-24T10:11:12.000Z",
+            },
+          ],
+        },
+        { columns: 84 }
+      )
+    );
+    const plain = stripAnsi(output);
+
+    expect(plain).toContain("retryable");
+    expect(plain).toContain("open /session 1");
+    expect(plain).toContain("last task perform the release check and produce a");
+    expect(plain).toContain("retry release-readiness -> perform the release");
+    expect(plain).toContain("messages 12");
+    expect(plain).toContain("updated 2026-05-24 10:11");
+    expect(plain).not.toContain("retry  \n");
   });
 
   it("renders old session retry metadata without a resolved workflow locator", () => {

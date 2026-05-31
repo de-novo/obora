@@ -568,6 +568,20 @@ const verifyCliChatTuiLayoutSmoke = async () => {
       cwd: '/repo',
       projectRoot: '/repo',
       dryRun: true,
+      sessionChoices: [
+        {
+          sessionId: 'layout-source-session',
+          status: 'ready',
+          cwd: '/repo',
+          projectRoot: '/repo',
+          tags: ['layout'],
+          workflowTarget: 'layout-workflow',
+          lastRunTask: 'inspect layout session retry affordances',
+          lastRunWorkflowName: 'layout-workflow',
+          messageCount: 3,
+          updatedAt: '2026-05-26T00:00:00.000Z',
+        },
+      ],
       messages: [],
       runChoices: [
         {
@@ -592,6 +606,13 @@ const verifyCliChatTuiLayoutSmoke = async () => {
   );
   const plain = stripAnsi(lines.join('\n'));
   assert(plain.includes('retry layout-workflow'), 'TUI run history must keep retry value visible');
+  assert(plain.includes('layout-source-session'), 'TUI session picker must show saved sessions');
+  assert(plain.includes('retryable'), 'TUI session picker must mark retryable sessions');
+  assert(plain.includes('open /session 1'), 'TUI session picker must show the open command');
+  assert(
+    plain.includes('last task inspect layout session retry affordances'),
+    'TUI session picker must show the saved retry task',
+  );
   assert(plain.includes('options provider openrouter'), 'TUI run history must show compact options');
   assert(plain.includes('model openrouter/owl-alpha'), 'TUI run history must show the run model');
   assert(plain.includes('timeout 2500ms'), 'TUI run history must show timeout metadata');
