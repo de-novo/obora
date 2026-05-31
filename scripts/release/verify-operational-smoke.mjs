@@ -572,6 +572,8 @@ const verifyCliChatTuiLayoutSmoke = async () => {
       cwd: '/repo',
       projectRoot: '/repo',
       dryRun: true,
+      workflowChoices: [locator],
+      selectedWorkflowChoiceIndex: 0,
       selectedSessionChoiceIndex: 0,
       sessionChoices: [
         {
@@ -587,6 +589,7 @@ const verifyCliChatTuiLayoutSmoke = async () => {
           updatedAt: '2026-05-26T00:00:00.000Z',
         },
       ],
+      selectedRunChoiceIndex: 0,
       messages: [],
       runChoices: [
         {
@@ -611,6 +614,9 @@ const verifyCliChatTuiLayoutSmoke = async () => {
   );
   const plain = stripAnsi(lines.join('\n'));
   assert(plain.includes('retry layout-workflow'), 'TUI run history must keep retry value visible');
+  assert(plain.includes('workflow open'), 'TUI workflow picker must show selected open command');
+  assert(plain.includes('› ○ #1 layout-workflow'), 'TUI workflow picker must show selected row cursor');
+  assert(plain.includes('› ○ #1 exec-layout-1'), 'TUI run picker must show selected row cursor');
   assert(plain.includes('layout-source-session'), 'TUI session picker must show saved sessions');
   assert(plain.includes('retryable'), 'TUI session picker must mark retryable sessions');
   assert(plain.includes('› ○ #1'), 'TUI session picker must show the selected row cursor');

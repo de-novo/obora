@@ -50,7 +50,13 @@ describe("chat command metadata", () => {
     expect(chatHelp).toContain("/workflow <name-or-path>");
     expect(chatHelp).toContain("  /retry status - shows what /retry will rerun");
     expect(chatHelp).toContain(
+      "  /workflow next, /workflow prev, or /workflow open - moves or opens the selected workflow choice"
+    );
+    expect(chatHelp).toContain(
       "  /retry 1 or /retry <executionId> - reruns a retryable run from history"
+    );
+    expect(chatHelp).toContain(
+      "  /details next, /details prev, /details open, or /retry open - moves, opens, or retries the selected run choice"
     );
     expect(chatHelp).toContain(
       "  /details 1 or /details <executionId> - shows latest or selected step results"
@@ -122,6 +128,7 @@ describe("chat command metadata", () => {
         runChoices: [{ runSummary, sessionId: "session-a" }],
       })
     ).toEqual([
+      "/details open  /details next  /details prev  /retry open",
       "/details 1  /retry 1  /details <runId>",
       "/runs --project  /runs --tag <tag>  /runs failed",
     ]);
@@ -162,6 +169,7 @@ describe("chat command metadata", () => {
         ],
       })
     ).toEqual([
+      "/workflow open  /workflow next  /workflow prev",
       "/workflow 1  /workflow <name>  /run #1 <task>",
       "/workflows [scope]  /project  /clear",
     ]);

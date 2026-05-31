@@ -271,6 +271,7 @@ describe("renderChatView", () => {
             dryRun: true,
           }),
           workflowLocator: locator,
+          selectedWorkflowChoiceIndex: 0,
           workflowChoices: [
             {
               ...locator,
@@ -294,12 +295,14 @@ describe("renderChatView", () => {
     const plain = stripAnsi(output);
 
     expect(plain).toContain("workflows");
-    expect(plain).toContain("/workflow 1");
+    expect(plain).toContain("/workflow open");
+    expect(plain).toContain("/workflow next");
     expect(plain).toContain("/run #1 <task>");
-    expect(plain).toContain("/workflows [scope]");
     expect(plain).toContain("close /clear");
-    expect(plain).toContain("● #1 release-readiness ready project steps 4");
+    expect(plain).toContain("› ● #1 release-readiness ready project steps 4");
     expect(plain).toContain("○ #2 code-review idle global steps 2");
+    expect(plain).toContain("select /workflow open");
+    expect(plain).toContain("move /workflow next");
     expect(plain).toContain("editable yes");
     expect(plain).toContain("editable no");
     expect(plain).toContain("about Release readiness");
@@ -319,6 +322,7 @@ describe("renderChatView", () => {
             dryRun: false,
           }),
           inspectedRunSummary: runSummary,
+          selectedRunChoiceIndex: 0,
           tags: ["release"],
           runChoices: [
             {
@@ -348,13 +352,15 @@ describe("renderChatView", () => {
     const plain = stripAnsi(output);
 
     expect(plain).toContain("runs");
-    expect(plain).toContain("details /details 1");
+    expect(plain).toContain("details /details open");
+    expect(plain).toContain("move /details next");
+    expect(plain).toContain("retry /retry open");
     expect(plain).toContain("/details <runId>");
     expect(plain).toContain("close /clear");
     expect(plain).toContain("/runs --project");
     expect(plain).toContain("/runs --tag release");
     expect(plain).toContain("/runs failed");
-    expect(plain).toContain("● #1 exec-chat-1 completed release-readiness steps 2/2");
+    expect(plain).toContain("› ● #1 exec-chat-1 completed release-readiness steps 2/2");
     expect(plain).toContain("○ #2 exec-chat-2 completed code-review steps 1/2");
     expect(plain).toContain("session session-a");
     expect(plain).toContain("session history-session");
@@ -387,7 +393,7 @@ describe("renderChatView", () => {
     const plain = stripAnsi(output);
 
     expect(plain).toContain("session current");
-    expect(plain).toContain("/details 1  /retry 1  /details <runId>");
+    expect(plain).toContain("/details open  /details next  /details prev  /retry open");
     expect(plain).toContain("/runs --tag <tag>");
     expect(plain).not.toContain("switch /session");
   });
@@ -469,6 +475,7 @@ describe("renderChatView", () => {
     const plain = stripAnsi(output);
 
     expect(plain).toContain("› Choose /workflow 1 or run once with /run #1 <task>");
+    expect(plain).toContain("/workflow open  /workflow next  /workflow prev");
     expect(plain).toContain("/workflow 1  /workflow <name>  /run #1 <task>");
     expect(plain).toContain("/workflows [scope]  /project  /clear");
   });

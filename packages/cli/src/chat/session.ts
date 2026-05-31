@@ -210,6 +210,12 @@ const workflowChoiceIndexFromTarget = (target: string): number | undefined =>
 const runChoiceIndexFromTarget = (target: string): number | undefined =>
   /^\d+$/u.test(target) ? Number.parseInt(target, 10) - 1 : undefined;
 
+const runPickerActionFromTarget = (target: string): "next" | "prev" | "open" | undefined =>
+  target === "next" || target === "prev" || target === "open" ? target : undefined;
+
+const workflowPickerActionFromTarget = (target: string): "next" | "prev" | "open" | undefined =>
+  target === "next" || target === "prev" || target === "open" ? target : undefined;
+
 const runWorkflowChoiceFromInput = (
   input: string
 ): { readonly index: number; readonly message: string } | undefined => {
@@ -333,6 +339,7 @@ const findRunSummaryInState = (
       message.runSummary?.executionId === executionId ? [message.runSummary] : []
     )
     .at(0) ??
+  state.runChoices?.find((choice) => choice.runSummary.executionId === executionId)?.runSummary ??
   (state.lastRunSummary?.executionId === executionId ? state.lastRunSummary : undefined) ??
   (state.inspectedRunSummary?.executionId === executionId
     ? state.inspectedRunSummary
@@ -361,6 +368,7 @@ const findRunChoiceInState = (
         : []
     )
     .at(0) ??
+  state.runChoices?.find((choice) => choice.runSummary.executionId === executionId) ??
   (state.lastRunSummary?.executionId === executionId
     ? {
         runSummary: state.lastRunSummary,
@@ -444,6 +452,42 @@ const runChoiceEntryAt = (
   index: number
 ): ChatRunChoice | undefined => (index >= 0 && state.runChoices ? state.runChoices[index] : undefined);
 
+const selectedRunChoiceEntry = (state: ChatSessionState): ChatRunChoice | undefined =>
+  state.runChoices
+    ? runChoiceEntryAt(state, clampChoiceIndex(state.runChoices, state.selectedRunChoiceIndex))
+    : undefined;
+
+const moveRunChoiceSelection = (
+  state: ChatSessionState,
+  direction: "next" | "prev"
+): ChatTurnResult =>
+  state.runChoices && state.runChoices.length > 0
+    ? {
+        state: appendAssistant(
+          {
+            ...withRunChoicesOnly(state),
+            selectedRunChoiceIndex: movedChoiceIndex(
+              state.runChoices,
+              state.selectedRunChoiceIndex,
+              direction
+            ),
+          },
+          `Selected run ${
+            state.runChoices[
+              movedChoiceIndex(state.runChoices, state.selectedRunChoiceIndex, direction)
+            ]?.runSummary.executionId ?? "unknown"
+          }.`
+        ),
+        exit: false,
+      }
+    : {
+        state: appendAssistant(
+          withRunChoicesOnly(state),
+          "No run choices are open. Run /runs first."
+        ),
+        exit: false,
+      };
+
 const runChoiceEntryForTarget = (
   state: ChatSessionState,
   target: string
@@ -494,15 +538,18 @@ const clearPanels = (state: ChatSessionState): ChatSessionState =>
         sessionChoices: undefined,
         selectedSessionChoiceIndex: undefined,
         workflowChoices: undefined,
+        selectedWorkflowChoiceIndex: undefined,
         showHelpPanel: undefined,
       }
     : {
         ...state,
         inspectedRunSummary: undefined,
         runChoices: undefined,
+        selectedRunChoiceIndex: undefined,
         sessionChoices: undefined,
         selectedSessionChoiceIndex: undefined,
         workflowChoices: undefined,
+        selectedWorkflowChoiceIndex: undefined,
         showHelpPanel: undefined,
       };
 
@@ -510,23 +557,34 @@ const withoutPanels = (state: ChatSessionState): ChatSessionState => ({
   ...state,
   inspectedRunSummary: undefined,
   runChoices: undefined,
+  selectedRunChoiceIndex: undefined,
   sessionChoices: undefined,
   selectedSessionChoiceIndex: undefined,
   workflowChoices: undefined,
+  selectedWorkflowChoiceIndex: undefined,
   showHelpPanel: undefined,
 });
 
-const clampSessionChoiceIndex = (
-  choices: ReadonlyArray<ChatSessionSummary>,
+const clampChoiceIndex = (
+  choices: ReadonlyArray<unknown>,
   index: number | undefined
 ): number => Math.min(Math.max(index ?? 0, 0), Math.max(choices.length - 1, 0));
+
+const movedChoiceIndex = (
+  choices: ReadonlyArray<unknown>,
+  index: number | undefined,
+  direction: "next" | "prev"
+): number =>
+  direction === "next"
+    ? (clampChoiceIndex(choices, index) + 1) % choices.length
+    : (clampChoiceIndex(choices, index) - 1 + choices.length) % choices.length;
 
 const withSessionChoicesOnly = (state: ChatSessionState): ChatSessionState => ({
   ...withoutPanels(state),
   ...(state.sessionChoices && state.sessionChoices.length > 0
     ? {
         sessionChoices: state.sessionChoices,
-        selectedSessionChoiceIndex: clampSessionChoiceIndex(
+        selectedSessionChoiceIndex: clampChoiceIndex(
           state.sessionChoices,
           state.selectedSessionChoiceIndex
         ),
@@ -537,13 +595,24 @@ const withSessionChoicesOnly = (state: ChatSessionState): ChatSessionState => ({
 const withWorkflowChoicesOnly = (state: ChatSessionState): ChatSessionState => ({
   ...withoutPanels(state),
   ...(state.workflowChoices && state.workflowChoices.length > 0
-    ? { workflowChoices: state.workflowChoices }
+    ? {
+        workflowChoices: state.workflowChoices,
+        selectedWorkflowChoiceIndex: clampChoiceIndex(
+          state.workflowChoices,
+          state.selectedWorkflowChoiceIndex
+        ),
+      }
     : {}),
 });
 
 const withRunChoicesOnly = (state: ChatSessionState): ChatSessionState => ({
   ...withoutPanels(state),
-  ...(state.runChoices && state.runChoices.length > 0 ? { runChoices: state.runChoices } : {}),
+  ...(state.runChoices && state.runChoices.length > 0
+    ? {
+        runChoices: state.runChoices,
+        selectedRunChoiceIndex: clampChoiceIndex(state.runChoices, state.selectedRunChoiceIndex),
+      }
+    : {}),
 });
 
 const withoutDeletedSessionChoice = (
@@ -558,7 +627,7 @@ const withoutDeletedSessionChoice = (
     ...(nextSessionChoices && nextSessionChoices.length > 0
       ? {
           sessionChoices: nextSessionChoices,
-          selectedSessionChoiceIndex: clampSessionChoiceIndex(
+          selectedSessionChoiceIndex: clampChoiceIndex(
             nextSessionChoices,
             state.selectedSessionChoiceIndex
           ),
@@ -580,7 +649,7 @@ const withRenamedSessionChoice = (
     ...(nextSessionChoices && nextSessionChoices.length > 0
       ? {
           sessionChoices: nextSessionChoices,
-          selectedSessionChoiceIndex: clampSessionChoiceIndex(
+          selectedSessionChoiceIndex: clampChoiceIndex(
             nextSessionChoices,
             state.selectedSessionChoiceIndex
           ),
@@ -609,9 +678,11 @@ const withHelpPanel = (state: ChatSessionState): ChatSessionState => ({
   ...state,
   inspectedRunSummary: undefined,
   runChoices: undefined,
+  selectedRunChoiceIndex: undefined,
   sessionChoices: undefined,
   selectedSessionChoiceIndex: undefined,
   workflowChoices: undefined,
+  selectedWorkflowChoiceIndex: undefined,
   showHelpPanel: true,
 });
 
@@ -720,9 +791,11 @@ const withRunChoices = (
   ...state,
   inspectedRunSummary: undefined,
   runChoices: runChoices.map((choice) => toChatRunChoice(choice, state.sessionId)),
+  selectedRunChoiceIndex: runChoices.length > 0 ? 0 : undefined,
   sessionChoices: undefined,
   selectedSessionChoiceIndex: undefined,
   workflowChoices: undefined,
+  selectedWorkflowChoiceIndex: undefined,
   showHelpPanel: undefined,
 });
 
@@ -737,9 +810,11 @@ const withSessionTags = (
   tags,
   inspectedRunSummary: undefined,
   runChoices: undefined,
+  selectedRunChoiceIndex: undefined,
   sessionChoices: undefined,
   selectedSessionChoiceIndex: undefined,
   workflowChoices: undefined,
+  selectedWorkflowChoiceIndex: undefined,
   showHelpPanel: undefined,
 });
 
@@ -752,7 +827,9 @@ const withSessionChoices = (
   sessionChoices,
   selectedSessionChoiceIndex: sessionChoices.length > 0 ? 0 : undefined,
   runChoices: undefined,
+  selectedRunChoiceIndex: undefined,
   workflowChoices: undefined,
+  selectedWorkflowChoiceIndex: undefined,
   showHelpPanel: undefined,
 });
 
@@ -764,9 +841,14 @@ const withInspectedRunSummary = (
   ...state,
   inspectedRunSummary: summary,
   runChoices,
+  selectedRunChoiceIndex:
+    runChoices && runChoices.length > 0
+      ? clampChoiceIndex(runChoices, state.selectedRunChoiceIndex)
+      : undefined,
   sessionChoices: undefined,
   selectedSessionChoiceIndex: undefined,
   workflowChoices: undefined,
+  selectedWorkflowChoiceIndex: undefined,
   showHelpPanel: undefined,
 });
 
@@ -863,18 +945,9 @@ const selectedSessionChoiceAt = (state: ChatSessionState): ChatSessionSummary | 
   state.sessionChoices
     ? sessionChoiceAt(
         state,
-        clampSessionChoiceIndex(state.sessionChoices, state.selectedSessionChoiceIndex)
+        clampChoiceIndex(state.sessionChoices, state.selectedSessionChoiceIndex)
       )
     : undefined;
-
-const movedSessionChoiceIndex = (
-  choices: ReadonlyArray<ChatSessionSummary>,
-  index: number | undefined,
-  direction: "next" | "prev"
-): number =>
-  direction === "next"
-    ? (clampSessionChoiceIndex(choices, index) + 1) % choices.length
-    : (clampSessionChoiceIndex(choices, index) - 1 + choices.length) % choices.length;
 
 const moveSessionChoiceSelection = (
   state: ChatSessionState,
@@ -885,7 +958,7 @@ const moveSessionChoiceSelection = (
         state: appendAssistant(
           {
             ...withSessionChoicesOnly(state),
-            selectedSessionChoiceIndex: movedSessionChoiceIndex(
+            selectedSessionChoiceIndex: movedChoiceIndex(
               state.sessionChoices,
               state.selectedSessionChoiceIndex,
               direction
@@ -893,7 +966,7 @@ const moveSessionChoiceSelection = (
           },
           `Selected session ${
             state.sessionChoices[
-              movedSessionChoiceIndex(
+              movedChoiceIndex(
                 state.sessionChoices,
                 state.selectedSessionChoiceIndex,
                 direction
@@ -984,8 +1057,10 @@ const withProjectRoot = (state: ChatSessionState, projectRoot: string): ChatSess
   workflowChoices: [],
   inspectedRunSummary: undefined,
   runChoices: undefined,
+  selectedRunChoiceIndex: undefined,
   sessionChoices: undefined,
   selectedSessionChoiceIndex: undefined,
+  selectedWorkflowChoiceIndex: undefined,
   showHelpPanel: undefined,
   lastError: undefined,
 });
@@ -1158,7 +1233,9 @@ const withWorkflowChoices = (
   ...state,
   inspectedRunSummary: undefined,
   workflowChoices,
+  selectedWorkflowChoiceIndex: workflowChoices.length > 0 ? 0 : undefined,
   runChoices: undefined,
+  selectedRunChoiceIndex: undefined,
   sessionChoices: undefined,
   selectedSessionChoiceIndex: undefined,
   showHelpPanel: undefined,
@@ -1173,8 +1250,10 @@ const withResolvedWorkflow = (
   workflowTarget,
   workflowLocator,
   workflowChoices: undefined,
+  selectedWorkflowChoiceIndex: undefined,
   inspectedRunSummary: undefined,
   runChoices: undefined,
+  selectedRunChoiceIndex: undefined,
   sessionChoices: undefined,
   selectedSessionChoiceIndex: undefined,
   showHelpPanel: undefined,
@@ -1187,6 +1266,45 @@ const workflowChoiceAt = (
   index: number
 ): WorkflowLocator | undefined =>
   index >= 0 && state.workflowChoices ? state.workflowChoices[index] : undefined;
+
+const selectedWorkflowChoiceAt = (state: ChatSessionState): WorkflowLocator | undefined =>
+  state.workflowChoices
+    ? workflowChoiceAt(
+        state,
+        clampChoiceIndex(state.workflowChoices, state.selectedWorkflowChoiceIndex)
+      )
+    : undefined;
+
+const moveWorkflowChoiceSelection = (
+  state: ChatSessionState,
+  direction: "next" | "prev"
+): ChatTurnResult =>
+  state.workflowChoices && state.workflowChoices.length > 0
+    ? {
+        state: appendAssistant(
+          {
+            ...withWorkflowChoicesOnly(state),
+            selectedWorkflowChoiceIndex: movedChoiceIndex(
+              state.workflowChoices,
+              state.selectedWorkflowChoiceIndex,
+              direction
+            ),
+          },
+          `Selected workflow ${
+            state.workflowChoices[
+              movedChoiceIndex(state.workflowChoices, state.selectedWorkflowChoiceIndex, direction)
+            ]?.name ?? "unknown"
+          }.`
+        ),
+        exit: false,
+      }
+    : {
+        state: appendAssistant(
+          withWorkflowChoicesOnly(state),
+          "No workflow choices are open. Run /workflows first."
+        ),
+        exit: false,
+      };
 
 const runChatTask = ({
   state,
@@ -1441,6 +1559,30 @@ export const handleChatInput = async ({
 
   const retryTarget = retryTargetFromCommand(trimmed);
   if (retryTarget && retryTarget !== "status") {
+    const runPickerAction = runPickerActionFromTarget(retryTarget);
+    if (runPickerAction === "next" || runPickerAction === "prev") {
+      return moveRunChoiceSelection(state, runPickerAction);
+    }
+    if (runPickerAction === "open") {
+      const selected = selectedRunChoiceEntry(state);
+      return selected
+        ? retryRunFromContext({
+            state,
+            target: runChoiceSummary(selected).executionId,
+            choice: selected,
+            resolveWorkflow,
+            runWorkflow,
+            commandOptions,
+          })
+        : {
+            state: appendAssistant(
+              withRunChoicesOnly(state),
+              "No run choice is selected. Run /runs first."
+            ),
+            exit: false,
+          };
+    }
+
     const retryChoiceIndex = runChoiceIndexFromTarget(retryTarget);
     const choice = runChoiceEntryForTarget(state, retryTarget);
     return choice
@@ -1789,6 +1931,29 @@ export const handleChatInput = async ({
   const workflowTarget =
     workflowTargetFromCommand(trimmed) ?? workflowChoiceShortcutTargetFromInput(trimmed, state);
   if (workflowTarget) {
+    const workflowPickerAction = workflowPickerActionFromTarget(workflowTarget);
+    if (workflowPickerAction === "next" || workflowPickerAction === "prev") {
+      return moveWorkflowChoiceSelection(state, workflowPickerAction);
+    }
+    if (workflowPickerAction === "open") {
+      const selected = selectedWorkflowChoiceAt(state);
+      return selected
+        ? {
+            state: appendAssistant(
+              withResolvedWorkflow(setChatStatus(state, "resolving"), selected.name, selected),
+              `Selected workflow ${selected.name} (${selected.scope}).`
+            ),
+            exit: false,
+          }
+        : {
+            state: appendAssistant(
+              withWorkflowChoicesOnly(state),
+              "No workflow choice is selected. Run /workflows first."
+            ),
+            exit: false,
+          };
+    }
+
     const choiceIndex = workflowChoiceIndexFromTarget(workflowTarget);
     const choice = choiceIndex === undefined ? undefined : workflowChoiceAt(state, choiceIndex);
     if (choice) {
@@ -1855,6 +2020,36 @@ export const handleChatInput = async ({
   const detailsExecutionId =
     detailsTargetFromCommand(trimmed) ?? runDetailShortcutTargetFromInput(trimmed, state);
   if (detailsExecutionId) {
+    const runPickerAction = runPickerActionFromTarget(detailsExecutionId);
+    if (runPickerAction === "next" || runPickerAction === "prev") {
+      return moveRunChoiceSelection(state, runPickerAction);
+    }
+    if (runPickerAction === "open") {
+      const selected = selectedRunChoiceEntry(state);
+      return selected
+        ? handleChatInput({
+            input: `/details ${runChoiceSummary(selected).executionId}`,
+            state,
+            resolveWorkflow,
+            runWorkflow,
+            commandOptions,
+            listSessions,
+            loadSession,
+            renameSession,
+            deleteSession,
+            listWorkflowLocators,
+            listRuns,
+            findRun,
+          })
+        : {
+            state: appendAssistant(
+              withRunChoicesOnly(state),
+              "No run choice is selected. Run /runs first."
+            ),
+            exit: false,
+          };
+    }
+
     const choiceIndex = runChoiceIndexFromTarget(detailsExecutionId);
     const choice = choiceIndex === undefined ? undefined : runChoiceEntryAt(state, choiceIndex);
     const stateChoice =

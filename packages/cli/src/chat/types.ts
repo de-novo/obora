@@ -49,6 +49,7 @@ export interface ChatSessionState {
   readonly workflowTarget?: string;
   readonly workflowLocator?: WorkflowLocator;
   readonly workflowChoices?: ReadonlyArray<WorkflowLocator>;
+  readonly selectedWorkflowChoiceIndex?: number;
   readonly sessionChoices?: ReadonlyArray<ChatSessionSummary>;
   readonly selectedSessionChoiceIndex?: number;
   readonly messages: ReadonlyArray<ChatMessage>;
@@ -61,6 +62,7 @@ export interface ChatSessionState {
   readonly lastRunSummary?: WorkflowRunSummary;
   readonly inspectedRunSummary?: WorkflowRunSummary;
   readonly runChoices?: ReadonlyArray<ChatRunChoice>;
+  readonly selectedRunChoiceIndex?: number;
   readonly showHelpPanel?: boolean;
 }
 

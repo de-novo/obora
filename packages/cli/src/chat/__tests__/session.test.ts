@@ -1363,6 +1363,7 @@ describe("chat session", () => {
     expect(listed.state.runChoices?.map((choice) => choice.runSummary.executionId)).toEqual([
       "exec-chat-1",
     ]);
+    expect(listed.state.selectedRunChoiceIndex).toBe(0);
     expect(listed.state.messages.at(-1)?.content).toContain("Recent workflow runs:");
     expect(listed.state.messages.at(-1)?.content).toContain("task perform the release check");
     expect(listed.state.messages.at(-1)?.content).toContain("retry release-readiness");
@@ -1373,6 +1374,75 @@ describe("chat session", () => {
     expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
     expect(opened.state.messages.at(-1)?.content).toContain("Opened run details exec-chat-1.");
     expect(opened.state.messages.at(-1)?.content).not.toContain("Use /session session-a");
+  });
+
+  it("moves, opens, and retries the selected run choice", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const codeReviewSummary = {
+      ...runSummary,
+      executionId: "exec-chat-2",
+      workflowName: "code-review",
+    };
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      selectedRunChoiceIndex: 0,
+      runChoices: [
+        {
+          runSummary,
+          sessionId: "session-a",
+          runTask: "perform the release check",
+          runWorkflowLocator: locator,
+        },
+        {
+          runSummary: codeReviewSummary,
+          sessionId: "session-a",
+          runTask: "review the current diff",
+          runWorkflowLocator: codeReviewLocator,
+        },
+      ],
+    };
+
+    const moved = await handleChatInput({
+      input: "/details next",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+    const opened = await handleChatInput({
+      input: "/details open",
+      state: moved.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    vi.clearAllMocks();
+    const retried = await handleChatInput({
+      input: "/retry open",
+      state: moved.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(moved.state.selectedRunChoiceIndex).toBe(1);
+    expect(moved.state.messages.at(-1)?.content).toContain("Selected run exec-chat-2.");
+    expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-2");
+    expect(opened.state.selectedRunChoiceIndex).toBe(1);
+    expect(opened.state.messages.at(-1)?.content).toContain("Opened run details exec-chat-2.");
+    expect(runWorkflow).toHaveBeenCalledWith(
+      codeReviewLocator.path,
+      expect.objectContaining({
+        input: expect.stringContaining("review the current diff"),
+      })
+    );
+    expect(retried.state.lastRunTask).toBe("review the current diff");
+    expect(retried.state.lastRunWorkflowLocator).toBe(codeReviewLocator);
   });
 
   it("retries a current-session run directly from the numbered run list", async () => {
@@ -4007,11 +4077,51 @@ describe("chat session", () => {
       "release-readiness",
       "code-review",
     ]);
+    expect(result.state.selectedWorkflowChoiceIndex).toBe(0);
     expect(result.state.messages.at(-1)?.content).toContain("Reusable workflows (global):");
     expect(result.state.messages.at(-1)?.content).toContain("1. release-readiness");
     expect(result.state.messages.at(-1)?.content).toContain("code-review");
     expect(result.state.messages.at(-1)?.content).toContain("Review repository changes");
     expect(result.state.messages.at(-1)?.content).toContain("/workflow 1");
+  });
+
+  it("moves and opens the selected workflow choice", async () => {
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      selectedWorkflowChoiceIndex: 0,
+      workflowChoices: [locator, codeReviewLocator],
+    };
+
+    const moved = await handleChatInput({
+      input: "/workflow next",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+    const opened = await handleChatInput({
+      input: "/workflow open",
+      state: moved.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(moved.state.selectedWorkflowChoiceIndex).toBe(1);
+    expect(moved.state.workflowChoices?.map((workflow) => workflow.name)).toEqual([
+      "release-readiness",
+      "code-review",
+    ]);
+    expect(moved.state.messages.at(-1)?.content).toContain("Selected workflow code-review.");
+    expect(opened.state.workflowLocator).toBe(codeReviewLocator);
+    expect(opened.state.selectedWorkflowChoiceIndex).toBeUndefined();
+    expect(opened.state.messages.at(-1)?.content).toContain(
+      "Selected workflow code-review (project)."
+    );
   });
 
   it("uses the session project root when listing workflows", async () => {

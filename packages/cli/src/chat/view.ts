@@ -382,6 +382,7 @@ const renderRunHistoryLine = (
 ): string => {
   const summary = runChoiceSummary(choice);
   return [
+    state.selectedRunChoiceIndex === index ? yellow("›") : muted(" "),
     runHistoryMarker(state, summary),
     cyan(`#${index + 1}`),
     bold(summary.executionId),
@@ -442,7 +443,7 @@ const renderRunHistory = (
         ...card(
           "runs",
           [
-            `${muted("details")} /details 1   ${muted("retry")} /retry 1   ${muted("by id")} /details <runId>`,
+            `${muted("details")} /details open   ${muted("move")} /details next   ${muted("retry")} /retry open   ${muted("by id")} /details <runId>`,
             `${muted("refresh")} /runs   ${muted("close")} /clear`,
             runFilterHint(state),
             ...state.runChoices
@@ -556,6 +557,7 @@ const renderWorkflowChoiceLine = (
   index: number
 ): string =>
   [
+    state.selectedWorkflowChoiceIndex === index ? yellow("›") : muted(" "),
     workflowMarker(state, locator),
     cyan(`#${index + 1}`),
     bold(locator.name),
@@ -581,7 +583,7 @@ const renderWorkflowPicker = (
         ...card(
           "workflows",
           [
-            `${muted("select")} /workflow 1   ${muted("run once")} /run #1 <task>   ${muted("refresh")} /workflows [scope]   ${muted("close")} /clear`,
+            `${muted("select")} /workflow open   ${muted("move")} /workflow next   ${muted("run once")} /run #1 <task>   ${muted("close")} /clear`,
             ...state.workflowChoices.slice(0, 8).flatMap((locator, index) => [
               renderWorkflowChoiceLine(state, locator, index),
               renderWorkflowChoiceMeta(locator, width - 4),

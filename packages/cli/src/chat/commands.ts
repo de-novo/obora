@@ -85,6 +85,11 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
     group: "workflow",
   },
   {
+    command: "/workflow next, /workflow prev, or /workflow open",
+    description: "moves or opens the selected workflow choice",
+    group: "workflow",
+  },
+  {
     command: "/run <task>",
     description: "runs the current workflow",
     group: "workflow",
@@ -102,6 +107,11 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
   {
     command: "/retry 1 or /retry <executionId>",
     description: "reruns a retryable run from history",
+    group: "run",
+  },
+  {
+    command: "/details next, /details prev, /details open, or /retry open",
+    description: "moves, opens, or retries the selected run choice",
     group: "run",
   },
   {
@@ -201,6 +211,7 @@ export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<st
   }
   if (state.runChoices && state.runChoices.length > 0) {
     return [
+      "/details open  /details next  /details prev  /retry open",
       "/details 1  /retry 1  /details <runId>",
       "/runs --project  /runs --tag <tag>  /runs failed",
     ];
@@ -219,6 +230,7 @@ export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<st
   }
   return state.workflowChoices && state.workflowChoices.length > 0
     ? [
+        "/workflow open  /workflow next  /workflow prev",
         "/workflow 1  /workflow <name>  /run #1 <task>",
         "/workflows [scope]  /project  /clear",
       ]
