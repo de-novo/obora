@@ -147,6 +147,7 @@ describe("renderChatView", () => {
             projectRoot: "/repo/project-a",
             dryRun: true,
           }),
+          selectedSessionChoiceIndex: 0,
           sessionChoices: [
             {
               sessionId: "session-a",
@@ -184,6 +185,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("close /clear");
     expect(plain).toContain("● #1 session-a ready release-readiness");
     expect(plain).toContain("○ #2 session-b idle no workflow");
+    expect(plain).toContain("› ● #1 session-a");
     expect(plain).toContain("release-readiness retryable");
     expect(plain).toContain("no workflow no-retry");
     expect(plain).toContain("open /session 1");
@@ -206,6 +208,7 @@ describe("renderChatView", () => {
             projectRoot: "/repo/project-a",
             dryRun: true,
           }),
+          selectedSessionChoiceIndex: 0,
           sessionChoices: [
             {
               sessionId: "session-with-a-very-long-name",

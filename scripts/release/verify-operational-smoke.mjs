@@ -470,6 +470,10 @@ const verifyCliChatSessionRetryFlowSmoke = async (tmpDir) => {
     'session picker must expose retryable source session metadata',
   );
   assert(
+    listedState.selectedSessionChoiceIndex === 0,
+    'session picker must select the first listed session by default',
+  );
+  assert(
     listedState.messages?.at?.(-1)?.content?.includes(
       `retry session-retry-workflow -> ${chatTask}`,
     ) === true,
@@ -479,8 +483,8 @@ const verifyCliChatSessionRetryFlowSmoke = async (tmpDir) => {
   const selectedState = await runCliJson({
     cwd: projectDir,
     env,
-    label: 'obora chat /session 1 --json',
-    args: ['--json', 'chat', '--session', browserSessionId, '--once', '/session 1'],
+    label: 'obora chat /session open --json',
+    args: ['--json', 'chat', '--session', browserSessionId, '--once', '/session open'],
   });
   assert(
     selectedState.sessionId === sourceSessionId,
@@ -568,6 +572,7 @@ const verifyCliChatTuiLayoutSmoke = async () => {
       cwd: '/repo',
       projectRoot: '/repo',
       dryRun: true,
+      selectedSessionChoiceIndex: 0,
       sessionChoices: [
         {
           sessionId: 'layout-source-session',
@@ -608,6 +613,7 @@ const verifyCliChatTuiLayoutSmoke = async () => {
   assert(plain.includes('retry layout-workflow'), 'TUI run history must keep retry value visible');
   assert(plain.includes('layout-source-session'), 'TUI session picker must show saved sessions');
   assert(plain.includes('retryable'), 'TUI session picker must mark retryable sessions');
+  assert(plain.includes('› ○ #1'), 'TUI session picker must show the selected row cursor');
   assert(plain.includes('open /session 1'), 'TUI session picker must show the open command');
   assert(
     plain.includes('last task inspect layout session retry affordances'),

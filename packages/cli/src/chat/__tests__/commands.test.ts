@@ -65,6 +65,9 @@ describe("chat command metadata", () => {
       "  /session rename 1 or /session rename <id> <new-id> - renames a session"
     );
     expect(chatHelp).toContain(
+      "  /session next, /session prev, or /session open - moves or opens the selected session choice"
+    );
+    expect(chatHelp).toContain(
       "  /session delete 1 or /session delete <id> - deletes a session"
     );
     expect(chatHelp).toContain("  /clear or /details clear - closes the current panel");
@@ -137,6 +140,7 @@ describe("chat command metadata", () => {
         ],
       })
     ).toEqual([
+      "/session open  /session next  /session prev",
       "/session 1  /session <id>  /session rename 1 <id>",
       "/session delete 1  /sessions here  /clear",
     ]);

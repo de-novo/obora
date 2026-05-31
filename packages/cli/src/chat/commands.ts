@@ -65,6 +65,11 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
     group: "session",
   },
   {
+    command: "/session next, /session prev, or /session open",
+    description: "moves or opens the selected session choice",
+    group: "session",
+  },
+  {
     command: "/session rename 1 or /session rename <id> <new-id>",
     description: "renames a session",
     group: "session",
@@ -202,6 +207,7 @@ export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<st
   }
   if (state.sessionChoices && state.sessionChoices.length > 0) {
     return [
+      "/session open  /session next  /session prev",
       "/session 1  /session <id>  /session rename 1 <id>",
       "/session delete 1  /sessions here  /clear",
     ];

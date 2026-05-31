@@ -3247,6 +3247,125 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("Session choice not found.");
   });
 
+  it("moves and opens the selected session choice", async () => {
+    const loaded = createInitialChatState({
+      sessionId: "session-c",
+      cwd: "/repo",
+      projectRoot: "/repo/project-c",
+      dryRun: false,
+    });
+    const loadSession = vi.fn(async (_sessionId: string) => loaded);
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      selectedSessionChoiceIndex: 0,
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          tags: [],
+          messageCount: 1,
+          updatedAt: "2026-05-24T00:00:00.000Z",
+        },
+        {
+          sessionId: "session-c",
+          status: "ready" as const,
+          cwd: "/repo",
+          tags: ["release"],
+          messageCount: 2,
+          updatedAt: "2026-05-25T00:00:00.000Z",
+        },
+      ],
+    };
+
+    const moved = await handleChatInput({
+      input: "/session next",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      loadSession,
+    });
+    const opened = await handleChatInput({
+      input: "/session open",
+      state: moved.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      loadSession,
+    });
+
+    expect(moved.state.selectedSessionChoiceIndex).toBe(1);
+    expect(moved.state.sessionChoices?.map((session) => session.sessionId)).toEqual([
+      "session-b",
+      "session-c",
+    ]);
+    expect(moved.state.messages.at(-1)?.content).toContain("Selected session session-c.");
+    expect(loadSession).toHaveBeenCalledWith("session-c");
+    expect(opened.state.sessionId).toBe("session-c");
+    expect(opened.state.projectRoot).toBe("/repo/project-c");
+    expect(opened.state.selectedSessionChoiceIndex).toBeUndefined();
+    expect(opened.state.messages.at(-1)?.content).toContain("Switched to session session-c.");
+  });
+
+  it("wraps session selection backward and explains missing selection panels", async () => {
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      selectedSessionChoiceIndex: 0,
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          tags: [],
+          messageCount: 1,
+          updatedAt: "2026-05-24T00:00:00.000Z",
+        },
+        {
+          sessionId: "session-c",
+          status: "ready" as const,
+          cwd: "/repo",
+          tags: [],
+          messageCount: 2,
+          updatedAt: "2026-05-25T00:00:00.000Z",
+        },
+      ],
+    };
+
+    const moved = await handleChatInput({
+      input: "/session prev",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+    const missing = await handleChatInput({
+      input: "/session open",
+      state: createInitialChatState({
+        sessionId: "session-empty",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(moved.state.selectedSessionChoiceIndex).toBe(1);
+    expect(moved.state.messages.at(-1)?.content).toContain("Selected session session-c.");
+    expect(missing.state.messages.at(-1)?.content).toContain(
+      "No session choice is selected. Run /sessions first."
+    );
+  });
+
   it("filters listed chat sessions by the current project root", async () => {
     const listSessions = vi.fn(async (_tag?: string, _projectRoot?: string) => [
       {
@@ -3282,6 +3401,7 @@ describe("chat session", () => {
     expect(result.state.sessionChoices?.map((session) => session.sessionId)).toEqual([
       "project-session",
     ]);
+    expect(result.state.selectedSessionChoiceIndex).toBe(0);
 
     const shortcut = await handleChatInput({
       input: "/sessions here",

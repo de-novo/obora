@@ -492,6 +492,7 @@ const clearPanels = (state: ChatSessionState): ChatSessionState =>
         ...state,
         inspectedRunSummary: undefined,
         sessionChoices: undefined,
+        selectedSessionChoiceIndex: undefined,
         workflowChoices: undefined,
         showHelpPanel: undefined,
       }
@@ -500,6 +501,7 @@ const clearPanels = (state: ChatSessionState): ChatSessionState =>
         inspectedRunSummary: undefined,
         runChoices: undefined,
         sessionChoices: undefined,
+        selectedSessionChoiceIndex: undefined,
         workflowChoices: undefined,
         showHelpPanel: undefined,
       };
@@ -509,14 +511,26 @@ const withoutPanels = (state: ChatSessionState): ChatSessionState => ({
   inspectedRunSummary: undefined,
   runChoices: undefined,
   sessionChoices: undefined,
+  selectedSessionChoiceIndex: undefined,
   workflowChoices: undefined,
   showHelpPanel: undefined,
 });
 
+const clampSessionChoiceIndex = (
+  choices: ReadonlyArray<ChatSessionSummary>,
+  index: number | undefined
+): number => Math.min(Math.max(index ?? 0, 0), Math.max(choices.length - 1, 0));
+
 const withSessionChoicesOnly = (state: ChatSessionState): ChatSessionState => ({
   ...withoutPanels(state),
   ...(state.sessionChoices && state.sessionChoices.length > 0
-    ? { sessionChoices: state.sessionChoices }
+    ? {
+        sessionChoices: state.sessionChoices,
+        selectedSessionChoiceIndex: clampSessionChoiceIndex(
+          state.sessionChoices,
+          state.selectedSessionChoiceIndex
+        ),
+      }
     : {}),
 });
 
@@ -542,7 +556,13 @@ const withoutDeletedSessionChoice = (
   return {
     ...withoutPanels(state),
     ...(nextSessionChoices && nextSessionChoices.length > 0
-      ? { sessionChoices: nextSessionChoices }
+      ? {
+          sessionChoices: nextSessionChoices,
+          selectedSessionChoiceIndex: clampSessionChoiceIndex(
+            nextSessionChoices,
+            state.selectedSessionChoiceIndex
+          ),
+        }
       : {}),
   };
 };
@@ -558,7 +578,13 @@ const withRenamedSessionChoice = (
   return {
     ...withoutPanels(state),
     ...(nextSessionChoices && nextSessionChoices.length > 0
-      ? { sessionChoices: nextSessionChoices }
+      ? {
+          sessionChoices: nextSessionChoices,
+          selectedSessionChoiceIndex: clampSessionChoiceIndex(
+            nextSessionChoices,
+            state.selectedSessionChoiceIndex
+          ),
+        }
       : {}),
   };
 };
@@ -584,6 +610,7 @@ const withHelpPanel = (state: ChatSessionState): ChatSessionState => ({
   inspectedRunSummary: undefined,
   runChoices: undefined,
   sessionChoices: undefined,
+  selectedSessionChoiceIndex: undefined,
   workflowChoices: undefined,
   showHelpPanel: true,
 });
@@ -694,6 +721,7 @@ const withRunChoices = (
   inspectedRunSummary: undefined,
   runChoices: runChoices.map((choice) => toChatRunChoice(choice, state.sessionId)),
   sessionChoices: undefined,
+  selectedSessionChoiceIndex: undefined,
   workflowChoices: undefined,
   showHelpPanel: undefined,
 });
@@ -710,6 +738,7 @@ const withSessionTags = (
   inspectedRunSummary: undefined,
   runChoices: undefined,
   sessionChoices: undefined,
+  selectedSessionChoiceIndex: undefined,
   workflowChoices: undefined,
   showHelpPanel: undefined,
 });
@@ -721,6 +750,7 @@ const withSessionChoices = (
   ...state,
   inspectedRunSummary: undefined,
   sessionChoices,
+  selectedSessionChoiceIndex: sessionChoices.length > 0 ? 0 : undefined,
   runChoices: undefined,
   workflowChoices: undefined,
   showHelpPanel: undefined,
@@ -735,6 +765,7 @@ const withInspectedRunSummary = (
   inspectedRunSummary: summary,
   runChoices,
   sessionChoices: undefined,
+  selectedSessionChoiceIndex: undefined,
   workflowChoices: undefined,
   showHelpPanel: undefined,
 });
@@ -828,6 +859,58 @@ const sessionChoiceAt = (
 ): ChatSessionSummary | undefined =>
   index >= 0 && state.sessionChoices ? state.sessionChoices[index] : undefined;
 
+const selectedSessionChoiceAt = (state: ChatSessionState): ChatSessionSummary | undefined =>
+  state.sessionChoices
+    ? sessionChoiceAt(
+        state,
+        clampSessionChoiceIndex(state.sessionChoices, state.selectedSessionChoiceIndex)
+      )
+    : undefined;
+
+const movedSessionChoiceIndex = (
+  choices: ReadonlyArray<ChatSessionSummary>,
+  index: number | undefined,
+  direction: "next" | "prev"
+): number =>
+  direction === "next"
+    ? (clampSessionChoiceIndex(choices, index) + 1) % choices.length
+    : (clampSessionChoiceIndex(choices, index) - 1 + choices.length) % choices.length;
+
+const moveSessionChoiceSelection = (
+  state: ChatSessionState,
+  direction: "next" | "prev"
+): ChatTurnResult =>
+  state.sessionChoices && state.sessionChoices.length > 0
+    ? {
+        state: appendAssistant(
+          {
+            ...withSessionChoicesOnly(state),
+            selectedSessionChoiceIndex: movedSessionChoiceIndex(
+              state.sessionChoices,
+              state.selectedSessionChoiceIndex,
+              direction
+            ),
+          },
+          `Selected session ${
+            state.sessionChoices[
+              movedSessionChoiceIndex(
+                state.sessionChoices,
+                state.selectedSessionChoiceIndex,
+                direction
+              )
+            ]?.sessionId
+          }.`
+        ),
+        exit: false,
+      }
+    : {
+        state: appendAssistant(
+          withSessionChoicesOnly(state),
+          "No session choices are open. Run /sessions first."
+        ),
+        exit: false,
+      };
+
 const sessionIdFromTarget = (
   state: ChatSessionState,
   target: string
@@ -902,6 +985,7 @@ const withProjectRoot = (state: ChatSessionState, projectRoot: string): ChatSess
   inspectedRunSummary: undefined,
   runChoices: undefined,
   sessionChoices: undefined,
+  selectedSessionChoiceIndex: undefined,
   showHelpPanel: undefined,
   lastError: undefined,
 });
@@ -1076,6 +1160,7 @@ const withWorkflowChoices = (
   workflowChoices,
   runChoices: undefined,
   sessionChoices: undefined,
+  selectedSessionChoiceIndex: undefined,
   showHelpPanel: undefined,
 });
 
@@ -1091,6 +1176,7 @@ const withResolvedWorkflow = (
   inspectedRunSummary: undefined,
   runChoices: undefined,
   sessionChoices: undefined,
+  selectedSessionChoiceIndex: undefined,
   showHelpPanel: undefined,
   status: "ready",
   lastError: undefined,
@@ -1487,6 +1573,36 @@ export const handleChatInput = async ({
   const sessionTarget =
     sessionTargetFromCommand(trimmed) ?? sessionChoiceShortcutTargetFromInput(trimmed, state);
   if (sessionTarget !== undefined) {
+    if (sessionTarget === "next" || sessionTarget === "prev") {
+      return moveSessionChoiceSelection(state, sessionTarget);
+    }
+
+    if (sessionTarget === "open") {
+      const selected = selectedSessionChoiceAt(state);
+      return selected
+        ? handleChatInput({
+            input: `/session ${selected.sessionId}`,
+            state,
+            resolveWorkflow,
+            runWorkflow,
+            commandOptions,
+            listSessions,
+            loadSession,
+            renameSession,
+            deleteSession,
+            listWorkflowLocators,
+            listRuns,
+            findRun,
+          })
+        : {
+            state: appendAssistant(
+              withSessionChoicesOnly(state),
+              "No session choice is selected. Run /sessions first."
+            ),
+            exit: false,
+          };
+    }
+
     const renameCommand = sessionRenameFromCommand(sessionTarget);
     if (renameCommand) {
       const target = sessionIdFromTarget(state, renameCommand.target);

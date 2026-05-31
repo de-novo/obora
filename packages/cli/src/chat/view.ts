@@ -497,6 +497,7 @@ const renderSessionChoiceLine = (
   index: number
 ): string =>
   [
+    state.selectedSessionChoiceIndex === index ? yellow("›") : muted(" "),
     summary.sessionId === state.sessionId ? green("●") : muted("○"),
     cyan(`#${index + 1}`),
     bold(summary.sessionId),
@@ -535,7 +536,7 @@ const renderSessionPicker = (
         ...card(
           "sessions",
           [
-            `${muted("select")} /session 1   ${muted("rename")} /session rename 1 <id>   ${muted("delete")} /session delete 1   ${muted("close")} /clear`,
+            `${muted("select")} /session open   ${muted("move")} /session next   ${muted("rename")} /session rename 1 <id>   ${muted("close")} /clear`,
             ...state.sessionChoices.slice(0, 8).flatMap((summary, index) => [
               renderSessionChoiceLine(state, summary, index),
               ...renderSessionChoiceMeta(summary, index, width - 4),
