@@ -259,6 +259,46 @@ describe("chat session", () => {
     );
   });
 
+  it("runs the selected picker workflow from a plain chat task", async () => {
+    vi.clearAllMocks();
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      selectedWorkflowChoiceIndex: 1,
+      workflowChoices: [locator, codeReviewLocator],
+    };
+    const selected = await handleChatInput({
+      input: "",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    const result = await handleChatInput({
+      input: "review the picker workflow handoff",
+      state: selected.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true, model: "openrouter/owl-alpha" },
+    });
+
+    expect(runWorkflow).toHaveBeenCalledWith(
+      codeReviewLocator.path,
+      expect.objectContaining({
+        dryRun: true,
+        model: "openrouter/owl-alpha",
+        input: expect.stringContaining("review the picker workflow handoff"),
+      })
+    );
+    expect(result.state.lastRunTask).toBe("review the picker workflow handoff");
+    expect(result.state.lastRunWorkflowLocator).toBe(codeReviewLocator);
+    expect(result.state.messages.at(-1)?.content).toContain("Dry-run completed");
+  });
+
   it("passes live run options for explicit /run commands", async () => {
     vi.clearAllMocks();
     const selected = {
