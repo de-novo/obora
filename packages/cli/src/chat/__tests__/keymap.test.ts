@@ -78,6 +78,9 @@ describe("commandForChatTuiKey", () => {
     expect(
       commandForChatTuiKey({ ...baseState, workflowChoices: [workflowLocator] }, { name: "return" })
     ).toBe("/workflow open");
+    expect(
+      commandForChatTuiKey({ ...baseState, workflowChoices: [workflowLocator] }, { value: "\r" })
+    ).toBe("/workflow open");
   });
 
   it("ignores non-picker states and unrelated keys", () => {
@@ -87,8 +90,8 @@ describe("commandForChatTuiKey", () => {
     ).toBeUndefined();
   });
 
-  it("injects mapped picker commands into the interactive reader", () => {
-    const writes: Array<string> = [];
+  it("runs mapped picker commands through the keybinding callback", () => {
+    const commands: Array<string> = [];
     const input = new PassThrough() as PassThrough & {
       readonly isTTY?: boolean;
       readonly setRawMode?: (mode: boolean) => void;
@@ -103,23 +106,20 @@ describe("commandForChatTuiKey", () => {
     });
     const uninstall = installChatTuiKeybindings({
       input,
-      reader: {
-        question: async () => "",
-        write: (data) => {
-          writes.push(data);
-        },
-      },
       tui: {
         snapshot: () => ({ ...baseState, workflowChoices: [workflowLocator] }),
+      },
+      onCommand: (command) => {
+        commands.push(command);
       },
     });
 
     input.emit("keypress", "", { name: "down" });
-    input.emit("keypress", "", { name: "return" });
+    input.emit("keypress", "\r", {});
     input.emit("keypress", "", { name: "x" });
     uninstall();
     input.emit("keypress", "", { name: "up" });
 
-    expect(writes).toEqual(["/workflow next\n", "/workflow open\n"]);
+    expect(commands).toEqual(["/workflow next", "/workflow open"]);
   });
 });

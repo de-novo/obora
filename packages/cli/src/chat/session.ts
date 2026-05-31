@@ -102,7 +102,6 @@ interface RunListFilter {
 
 interface ChatInteractiveReader {
   readonly question: (query: string) => Promise<string>;
-  readonly write?: (data: string) => void;
 }
 
 type ChatKeypressInput = Readable & {
@@ -1493,7 +1492,23 @@ export const handleChatInput = async ({
   const trimmed = input.trim();
 
   if (!trimmed) {
-    return { state, exit: false };
+    const openCommand = commandForChatTuiKey(state, { name: "return" });
+    return openCommand
+      ? handleChatInput({
+          input: openCommand,
+          state,
+          resolveWorkflow,
+          runWorkflow,
+          commandOptions,
+          listSessions,
+          loadSession,
+          renameSession,
+          deleteSession,
+          listWorkflowLocators,
+          listRuns,
+          findRun,
+        })
+      : { state, exit: false };
   }
 
   if (isExitCommand(trimmed)) {
@@ -2170,7 +2185,6 @@ export const handleChatInput = async ({
 
 const promptLoop = async ({
   reader,
-  state,
   tui,
   resolveWorkflow,
   runWorkflow,
@@ -2183,9 +2197,9 @@ const promptLoop = async ({
   listRuns,
   findRun,
   persist,
+  stateRef,
 }: {
   readonly reader: ChatInteractiveReader;
-  readonly state: ChatSessionState;
   readonly tui: ChatTuiController;
   readonly resolveWorkflow: (
     target: string,
@@ -2213,11 +2227,13 @@ const promptLoop = async ({
   ) => Promise<ReadonlyArray<ChatRunDetail>>;
   readonly findRun: (executionId: string) => Promise<ChatRunDetail | undefined>;
   readonly persist: (state: ChatSessionState) => Promise<void>;
+  readonly stateRef: { current: ChatSessionState };
 }): Promise<ChatSessionState> => {
   const input = await reader.question("> ");
+  const currentState = stateRef.current;
   const result = await handleChatInput({
     input,
-    state,
+    state: currentState,
     resolveWorkflow,
     runWorkflow,
     commandOptions,
@@ -2229,13 +2245,13 @@ const promptLoop = async ({
     listRuns,
     findRun,
   });
+  stateRef.current = result.state;
   tui.update(result.state);
   await persist(result.state);
   return result.exit || tui.isAbortRequested()
     ? result.state
     : promptLoop({
         reader,
-        state: result.state,
         tui,
         resolveWorkflow,
         runWorkflow,
@@ -2248,6 +2264,7 @@ const promptLoop = async ({
         listRuns,
         findRun,
         persist,
+        stateRef,
       });
 };
 
@@ -2255,18 +2272,18 @@ const noop = (): void => undefined;
 
 export const installChatTuiKeybindings = ({
   input,
-  reader,
   tui,
+  onCommand,
 }: {
   readonly input: Readable & { readonly isTTY?: boolean };
-  readonly reader: ChatInteractiveReader;
   readonly tui: Pick<ChatTuiController, "snapshot">;
+  readonly onCommand: (command: string) => void;
 }): (() => void) => {
   const keypressInput = input as ChatKeypressInput;
-  const keypressHandler = (_value: string, key: ChatTuiKey): void => {
-    const command = commandForChatTuiKey(tui.snapshot(), key);
+  const keypressHandler = (value: string, key: ChatTuiKey): void => {
+    const command = commandForChatTuiKey(tui.snapshot(), { ...key, value });
     if (command) {
-      reader.write?.(`${command}\n`);
+      onCommand(command);
     }
   };
   const enableKeybindings = (): (() => void) => {
@@ -2278,7 +2295,7 @@ export const installChatTuiKeybindings = ({
       keypressInput.setRawMode?.(false);
     };
   };
-  return input.isTTY && reader.write ? enableKeybindings() : noop;
+  return input.isTTY ? enableKeybindings() : noop;
 };
 
 const resolveInitialWorkflow = async ({
@@ -2459,15 +2476,42 @@ export const runChatSession = async (
   await saveSession(options.cwd, resolvedState, options.sessionStoreDir);
 
   const reader = createInterface({ input: options.input, output: options.output });
+  const interactiveReader: ChatInteractiveReader = {
+    question: (query) => reader.question(query),
+  };
+  const stateRef = { current: resolvedState };
+  const keyCommandChain = { current: Promise.resolve() };
+  const persistState = (state: ChatSessionState): Promise<void> =>
+    saveSession(options.cwd, state, options.sessionStoreDir);
+  const handleKeyCommand = (input: string): void => {
+    keyCommandChain.current = keyCommandChain.current.then(async () => {
+      const result = await handleChatInput({
+        input,
+        state: stateRef.current,
+        resolveWorkflow,
+        runWorkflow,
+        commandOptions: options.commandOptions,
+        listSessions,
+        loadSession,
+        renameSession,
+        deleteSession,
+        listWorkflowLocators,
+        listRuns,
+        findRun,
+      });
+      stateRef.current = result.state;
+      tui.update(result.state);
+      await persistState(result.state);
+    });
+  };
   const uninstallKeybindings = installChatTuiKeybindings({
     input: options.input,
-    reader,
     tui,
+    onCommand: handleKeyCommand,
   });
 
   return promptLoop({
-    reader,
-    state: resolvedState,
+    reader: interactiveReader,
     tui,
     resolveWorkflow,
     runWorkflow,
@@ -2479,12 +2523,15 @@ export const runChatSession = async (
     listWorkflowLocators,
     listRuns,
     findRun,
-    persist: (state) => saveSession(options.cwd, state, options.sessionStoreDir),
+    persist: persistState,
+    stateRef,
   })
     .then((state) => saveSession(options.cwd, state, options.sessionStoreDir).then(() => state))
-    .finally(() => {
-      uninstallKeybindings();
-      reader.close();
-      return tui.stop();
-    });
+    .finally(() =>
+      keyCommandChain.current.finally(() => {
+        uninstallKeybindings();
+        reader.close();
+        return tui.stop();
+      })
+    );
 };

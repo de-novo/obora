@@ -2,6 +2,7 @@ import type { ChatSessionState } from "./types.js";
 
 export interface ChatTuiKey {
   readonly name?: string;
+  readonly value?: string;
 }
 
 type PickerKind = "run" | "session" | "workflow";
@@ -29,7 +30,10 @@ const keyAction = (key: ChatTuiKey): "next" | "prev" | "open" | undefined =>
     ? "next"
     : key.name === "up"
       ? "prev"
-      : key.name === "return" || key.name === "enter"
+      : key.name === "return" ||
+          key.name === "enter" ||
+          key.value === "\r" ||
+          key.value === "\n"
         ? "open"
         : undefined;
 

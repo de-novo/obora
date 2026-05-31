@@ -234,6 +234,31 @@ describe("chat session", () => {
     expect(result).toEqual({ state, exit: false });
   });
 
+  it("opens the active picker on empty enter input", async () => {
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      selectedWorkflowChoiceIndex: 1,
+      workflowChoices: [locator, codeReviewLocator],
+    };
+
+    const result = await handleChatInput({
+      input: "",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(result.state.workflowLocator).toBe(codeReviewLocator);
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Selected workflow code-review (project)."
+    );
+  });
+
   it("passes live run options for explicit /run commands", async () => {
     vi.clearAllMocks();
     const selected = {
