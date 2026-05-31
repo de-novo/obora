@@ -414,6 +414,123 @@ const verifyCliChatWorkflowSwitchSmoke = async (tmpDir) => {
   console.log('[PASS] Built CLI chat workflow switch smoke passed.');
 };
 
+const verifyCliChatSessionRetryFlowSmoke = async (tmpDir) => {
+  const homeDir = join(tmpDir, 'chat-session-retry-home');
+  await mkdir(homeDir, { recursive: true });
+  const env = createSmokeEnv(homeDir);
+  const projectDir = join(tmpDir, 'chat-session-retry-project');
+  const sourceSessionId = 'smoke-chat-source-session';
+  const browserSessionId = 'smoke-chat-browser-session';
+  const sessionTag = 'smoke-retry';
+  const chatTask = 'Keep this selected session retryable';
+
+  await mkdir(projectDir, { recursive: true });
+  await writeFile(
+    join(projectDir, 'workflow.yaml'),
+    ['name: session-retry-workflow', 'version: "1.0"', 'steps: []', ''].join('\n'),
+    'utf8',
+  );
+
+  const sourceState = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat source session --json',
+    args: [
+      '--json',
+      'chat',
+      'workflow.yaml',
+      '--session',
+      sourceSessionId,
+      '--tags',
+      sessionTag,
+      '--once',
+      chatTask,
+    ],
+  });
+  const sourceExecutionId = sourceState.lastRunSummary?.executionId;
+  assert(sourceExecutionId, 'session retry smoke must create a source execution');
+  assert(
+    sourceState.lastRunWorkflowLocator?.name === 'session-retry-workflow',
+    'source session must preserve the retry workflow locator',
+  );
+
+  const listedState = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat /sessions tag --json',
+    args: ['--json', 'chat', '--session', browserSessionId, '--once', `/sessions ${sessionTag}`],
+  });
+  assert(
+    listedState.sessionChoices?.some?.(
+      (summary) =>
+        summary.sessionId === sourceSessionId &&
+        summary.lastRunTask === chatTask &&
+        summary.lastRunWorkflowName === 'session-retry-workflow',
+    ) === true,
+    'session picker must expose retryable source session metadata',
+  );
+  assert(
+    listedState.messages?.at?.(-1)?.content?.includes(
+      `retry session-retry-workflow -> ${chatTask}`,
+    ) === true,
+    'session list message must include workflow and task retry metadata',
+  );
+
+  const selectedState = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat /session 1 --json',
+    args: ['--json', 'chat', '--session', browserSessionId, '--once', '/session 1'],
+  });
+  assert(
+    selectedState.sessionId === sourceSessionId,
+    'session picker numeric choice must switch to the retryable source session',
+  );
+  assert(selectedState.lastRunTask === chatTask, 'selected session must restore the retry task');
+  assert(
+    selectedState.lastRunWorkflowLocator?.name === 'session-retry-workflow',
+    'selected session must restore the retry workflow locator',
+  );
+
+  const retryStatusState = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat /retry status after session selection --json',
+    args: ['--json', 'chat', '--session', sourceSessionId, '--once', '/retry status'],
+  });
+  assert(
+    retryStatusState.messages?.at?.(-1)?.content?.includes(
+      `Task: ${chatTask}`,
+    ) === true,
+    'retry status must describe the selected session task',
+  );
+  assert(
+    retryStatusState.messages?.at?.(-1)?.content?.includes(
+      'Workflow: session-retry-workflow',
+    ) === true,
+    'retry status must describe the selected session workflow',
+  );
+
+  const retriedState = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat /retry after session selection --json',
+    args: ['--json', 'chat', '--session', sourceSessionId, '--once', '/retry'],
+  });
+  assert(
+    retriedState.lastRunSummary?.executionId &&
+      retriedState.lastRunSummary.executionId !== sourceExecutionId,
+    'selected session retry must create a new execution id',
+  );
+  assert(retriedState.lastRunTask === chatTask, 'selected session retry must reuse the task');
+  assert(
+    retriedState.lastRunWorkflowLocator?.name === 'session-retry-workflow',
+    'selected session retry must reuse the workflow locator',
+  );
+
+  console.log('[PASS] Built CLI chat session retry flow smoke passed.');
+};
+
 const verifyCliChatTuiLayoutSmoke = async () => {
   await assertFile(
     cliChatViewDistPath,
@@ -556,6 +673,7 @@ const main = async () => {
     await verifyCliChatOnceSmoke(tmpDir);
     await verifyCliChatRunHistorySmoke(tmpDir);
     await verifyCliChatWorkflowSwitchSmoke(tmpDir);
+    await verifyCliChatSessionRetryFlowSmoke(tmpDir);
     await verifyCliChatTuiLayoutSmoke();
     await verifyDashboardBootstrapSmoke(tmpDir);
     console.log('[PASS] Operational smoke completed successfully.');
