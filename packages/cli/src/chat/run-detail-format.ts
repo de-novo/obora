@@ -110,3 +110,29 @@ export const formatChatRunDetail = (detail: ChatRunDetail): string =>
         ]
       : []),
   ].join("\n");
+
+export const formatChatRunDiffPreview = (detail: ChatRunDetail): string | undefined =>
+  detail.runSummary.repositoryChanges
+    ? [
+        "# Chat Run Diff Preview",
+        "",
+        `Execution: ${detail.runSummary.executionId}`,
+        `Session: ${detail.sessionId}`,
+        ...(detail.projectRoot ? [`Project: ${detail.projectRoot}`] : []),
+        `Workflow: ${detail.runSummary.workflowName}`,
+        `Status: ${detail.runSummary.status}`,
+        `Repository root: ${detail.runSummary.repositoryChanges.root}`,
+        `Summary: ${detail.runSummary.repositoryChanges.summary}`,
+        "",
+        "```diff",
+        ...detail.runSummary.repositoryChanges.files.flatMap((file, index) => [
+          fileChangeTitle(file, index),
+          ...(file.diffPreview && file.diffPreview.length > 0
+            ? file.diffPreview
+            : ["No diff preview recorded."]),
+          "",
+        ]),
+        "```",
+        "",
+      ].join("\n")
+    : undefined;

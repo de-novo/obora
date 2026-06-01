@@ -622,6 +622,7 @@ obora chat --list-sessions --group-sessions project|tag|day [--filter-tag <tag>]
 obora chat --show-session --session <id> [--json]
 obora chat --list-runs [--session <id>] [--filter-run-status <status>] [--filter-tag <tag>] [--filter-project <path|current>] [--json]
 obora chat --show-run <executionId> [--session <id>]
+obora chat --show-run <executionId> --save-diff <path>
 ```
 
 ### Options
@@ -639,6 +640,7 @@ obora chat --show-run <executionId> [--session <id>]
 - `--list-runs` list persisted workflow runs without starting the TUI, including saved task, retry target, and compact run options; with `--session`, search only that session
 - `--filter-run-status <queued|running|waiting|suspended|completed|failed|aborted>` only list persisted workflow runs with the given status
 - `--show-run <executionId>` print a persisted workflow run summary with step details and full saved run options; with `--session`, search only that session
+- `--save-diff <path>` with `--show-run` writes the saved repository diff preview to a project-relative or absolute path
 - `--once <message>` run one chat message and exit, useful for automation and smoke tests
 - `--dry-run` validate the selected workflow without live execution
 - `--provider <name>` LLM provider override for workflow runs

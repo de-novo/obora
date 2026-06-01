@@ -1,7 +1,13 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, resolve } from "node:path";
+
 import { Command } from "commander";
 
 import { runChatSession } from "../chat/session.js";
-import { formatChatRunDetail } from "../chat/run-detail-format.js";
+import {
+  formatChatRunDetail,
+  formatChatRunDiffPreview,
+} from "../chat/run-detail-format.js";
 import { formatChatSessionDetail } from "../chat/session-detail-format.js";
 import {
   formatCompactChatRunOptions,
@@ -16,6 +22,7 @@ import {
   loadChatSessionState,
 } from "../chat/store.js";
 import type { ChatSessionGroupBy, ChatSessionSummaryGroup } from "../chat/store.js";
+import type { ChatRunDetail } from "../chat/store.js";
 import type { ChatCommandOptions } from "../chat/types.js";
 import { CLIError } from "../utils/cli-error.js";
 import { handleCommandAction } from "../utils/error-handler.js";
@@ -25,6 +32,28 @@ import { getGlobalOpts } from "../utils/global-opts.js";
 
 const parseSessionGroupBy = (value: string | undefined): ChatSessionGroupBy | undefined =>
   value === "project" || value === "tag" || value === "day" ? value : undefined;
+
+const saveDiffOutputPath = (detail: ChatRunDetail, outputPath: string): string =>
+  isAbsolute(outputPath)
+    ? outputPath
+    : resolve(detail.projectRoot ?? process.cwd(), outputPath);
+
+const saveChatRunDiffPreview = async (
+  detail: ChatRunDetail,
+  outputPath: string
+): Promise<string> => {
+  const body = formatChatRunDiffPreview(detail);
+  if (!body) {
+    throw new CLIError(
+      `Chat run has no repository changes to save: ${detail.runSummary.executionId}`,
+      ExitCode.CLI_ERROR
+    );
+  }
+  const resolvedPath = saveDiffOutputPath(detail, outputPath);
+  await mkdir(dirname(resolvedPath), { recursive: true });
+  await writeFile(resolvedPath, body, "utf-8");
+  return resolvedPath;
+};
 
 const sessionRetryColumn = (session: ChatSessionSummaryGroup["sessions"][number]): string =>
   session.lastRunTask && session.lastRunWorkflowName ? session.lastRunWorkflowName : "-";
@@ -64,6 +93,7 @@ export function createChatCommand(): Command {
     .option("--show-session", "Show the persisted chat session selected by --session")
     .option("--list-runs", "List persisted workflow runs, optionally scoped by --session")
     .option("--show-run <executionId>", "Show a persisted workflow run summary by execution id")
+    .option("--save-diff <path>", "With --show-run, save repository diff preview to a file")
     .option("--once <message>", "Run one chat message and exit")
     .option("--dry-run", "Validate the selected workflow without live execution")
     .option("--provider <name>", "LLM provider override for workflow runs")
@@ -82,6 +112,10 @@ export function createChatCommand(): Command {
       const globalOpts = getGlobalOpts(this);
       await handleCommandAction(
         async () => {
+          if (options.saveDiff && !options.showRun) {
+            throw new CLIError("--save-diff requires --show-run <executionId>", ExitCode.CLI_ERROR);
+          }
+
           if (options.listSessions) {
             const sessions = await listChatSessionSummaries({
               cwd: process.cwd(),
@@ -181,9 +215,15 @@ export function createChatCommand(): Command {
             if (!detail) {
               throw new CLIError(`Chat run not found: ${options.showRun}`, ExitCode.CLI_ERROR);
             }
+            const savedDiffPath = options.saveDiff
+              ? await saveChatRunDiffPreview(detail, options.saveDiff)
+              : undefined;
             if (options.json || globalOpts.json) {
-              formatter.json(detail);
+              formatter.json(savedDiffPath ? { ...detail, savedDiffPath } : detail);
             } else {
+              if (savedDiffPath) {
+                console.log(`Saved repository diff preview: ${savedDiffPath}`);
+              }
               console.log(formatChatRunDetail(detail));
             }
             return;

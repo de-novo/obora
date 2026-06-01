@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { formatChatRunDetail } from "../run-detail-format.js";
+import {
+  formatChatRunDetail,
+  formatChatRunDiffPreview,
+} from "../run-detail-format.js";
 import type { ChatRunDetail } from "../store.js";
 
 const fullDetail: ChatRunDetail = {
@@ -105,6 +108,49 @@ describe("formatChatRunDetail", () => {
     expect(text).toContain("decisions: Use saved chat run");
     expect(text).toContain("dependencies: bootstrap");
     expect(text).toContain("issues: none");
+  });
+
+  it("formats repository diff previews as a standalone document", () => {
+    const text = formatChatRunDiffPreview(fullDetail);
+
+    expect(text).toContain("# Chat Run Diff Preview");
+    expect(text).toContain("Execution: exec-123");
+    expect(text).toContain("Session: session-a");
+    expect(text).toContain("Project: /repo/source-project");
+    expect(text).toContain("Repository root: /repo/source-project");
+    expect(text).toContain("Summary: 1 file changed: modified README.md (+3/-1)");
+    expect(text).toContain("```diff");
+    expect(text).toContain("1. M README.md");
+    expect(text).toContain("+new line");
+  });
+
+  it("does not format a standalone diff document without repository changes", () => {
+    expect(
+      formatChatRunDiffPreview({
+        ...fullDetail,
+        runSummary: {
+          ...fullDetail.runSummary,
+          repositoryChanges: undefined,
+        },
+      })
+    ).toBeUndefined();
+  });
+
+  it("formats standalone diff documents when a file has no diff preview", () => {
+    const text = formatChatRunDiffPreview({
+      ...fullDetail,
+      runSummary: {
+        ...fullDetail.runSummary,
+        repositoryChanges: {
+          root: "/repo/source-project",
+          files: [{ status: "A", path: "notes.md" }],
+          summary: "1 file changed: added notes.md",
+        },
+      },
+    });
+
+    expect(text).toContain("1. A notes.md");
+    expect(text).toContain("No diff preview recorded.");
   });
 
   it("renders legacy non-retryable runs without optional metadata", () => {

@@ -1,3 +1,7 @@
+import { mkdtemp, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
 import { runChatSession } from "../../chat/session.js";
 import {
   findChatRunDetail,
@@ -411,6 +415,155 @@ describe("chat command", () => {
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("artifacts: README.md"));
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining("decisions: Use saved chat run")
+    );
+  });
+
+  it("saves a persisted chat run repository diff preview", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-chat-show-run-diff-"));
+    const outputPath = join(dir, "run.diff.md");
+    vi.mocked(findChatRunDetail).mockResolvedValue({
+      sessionId: "session-a",
+      projectRoot: dir,
+      messageId: "assistant:run",
+      messageCreatedAt: "2026-05-24T00:00:01.000Z",
+      runTask: "prepare release",
+      runSummary: {
+        executionId: "exec-diff",
+        workflowName: "release-readiness",
+        status: "completed",
+        startedAt: "2026-05-24T00:00:00.000Z",
+        completedStepCount: 0,
+        totalStepCount: 0,
+        message: "Workflow completed: 0/0 steps completed.",
+        repositoryChanges: {
+          root: dir,
+          files: [
+            {
+              status: "M",
+              path: "README.md",
+              diffPreview: ["@@ -1 +1 @@", "-old", "+new"],
+            },
+          ],
+          summary: "1 file changed: modified README.md",
+        },
+        steps: [],
+      },
+    });
+
+    await createChatCommand().parseAsync(
+      ["--show-run", "exec-diff", "--session", "session-a", "--save-diff", "run.diff.md"],
+      { from: "user" }
+    );
+
+    await expect(readFile(outputPath, "utf-8")).resolves.toContain("+new");
+    expect(console.log).toHaveBeenCalledWith(
+      `Saved repository diff preview: ${outputPath}`
+    );
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Run exec-diff"));
+  });
+
+  it("includes the saved diff path in JSON show-run output", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-chat-show-run-diff-json-"));
+    vi.mocked(findChatRunDetail).mockResolvedValue({
+      sessionId: "session-a",
+      projectRoot: dir,
+      messageId: "assistant:run",
+      messageCreatedAt: "2026-05-24T00:00:01.000Z",
+      runSummary: {
+        executionId: "exec-diff-json",
+        workflowName: "release-readiness",
+        status: "completed",
+        startedAt: "2026-05-24T00:00:00.000Z",
+        completedStepCount: 0,
+        totalStepCount: 0,
+        message: "Workflow completed: 0/0 steps completed.",
+        repositoryChanges: {
+          root: dir,
+          files: [{ status: "M", path: "README.md", diffPreview: ["+json"] }],
+          summary: "1 file changed: modified README.md",
+        },
+        steps: [],
+      },
+    });
+
+    await createChatCommand().parseAsync(
+      ["--show-run", "exec-diff-json", "--save-diff", "audit/diff.md", "--json"],
+      { from: "user" }
+    );
+
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"savedDiffPath"'));
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining(join(dir, "audit", "diff.md"))
+    );
+  });
+
+  it("saves a persisted chat run repository diff preview to an absolute path", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-chat-show-run-diff-absolute-"));
+    const outputPath = join(dir, "absolute.diff.md");
+    vi.mocked(findChatRunDetail).mockResolvedValue({
+      sessionId: "session-a",
+      messageId: "assistant:run",
+      messageCreatedAt: "2026-05-24T00:00:01.000Z",
+      runSummary: {
+        executionId: "exec-diff-absolute",
+        workflowName: "release-readiness",
+        status: "completed",
+        startedAt: "2026-05-24T00:00:00.000Z",
+        completedStepCount: 0,
+        totalStepCount: 0,
+        message: "Workflow completed: 0/0 steps completed.",
+        repositoryChanges: {
+          root: dir,
+          files: [{ status: "A", path: "README.md", diffPreview: ["+absolute"] }],
+          summary: "1 file changed: added README.md",
+        },
+        steps: [],
+      },
+    });
+
+    await createChatCommand().parseAsync(
+      ["--show-run", "exec-diff-absolute", "--save-diff", outputPath],
+      { from: "user" }
+    );
+
+    await expect(readFile(outputPath, "utf-8")).resolves.toContain("+absolute");
+    expect(console.log).toHaveBeenCalledWith(
+      `Saved repository diff preview: ${outputPath}`
+    );
+  });
+
+  it("fails clearly when saving a show-run diff without repository changes", async () => {
+    vi.mocked(findChatRunDetail).mockResolvedValue({
+      sessionId: "session-a",
+      messageId: "assistant:run",
+      messageCreatedAt: "2026-05-24T00:00:01.000Z",
+      runSummary: {
+        executionId: "exec-no-diff",
+        workflowName: "release-readiness",
+        status: "completed",
+        startedAt: "2026-05-24T00:00:00.000Z",
+        completedStepCount: 0,
+        totalStepCount: 0,
+        message: "Workflow completed: 0/0 steps completed.",
+        steps: [],
+      },
+    });
+
+    await createChatCommand().parseAsync(
+      ["--show-run", "exec-no-diff", "--save-diff", "run.diff.md"],
+      { from: "user" }
+    );
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("Chat run has no repository changes to save: exec-no-diff")
+    );
+  });
+
+  it("requires --show-run before saving a chat run diff", async () => {
+    await createChatCommand().parseAsync(["--save-diff", "run.diff.md"], { from: "user" });
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("--save-diff requires --show-run <executionId>")
     );
   });
 

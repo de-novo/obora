@@ -89,6 +89,7 @@ export interface ChatCommandOptions {
   readonly listRuns?: boolean;
   readonly showSession?: boolean;
   readonly showRun?: string;
+  readonly saveDiff?: string;
   readonly groupSessions?: string;
   readonly filterTag?: string;
   readonly filterProject?: string;

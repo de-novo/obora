@@ -159,6 +159,7 @@ obora chat --list-sessions --filter-tag release
 obora chat --show-session --session release-qa
 obora chat --list-runs --filter-tag release --filter-run-status completed --json
 obora chat --show-run <executionId> --session release-qa
+obora chat --show-run <executionId> --save-diff artifacts/run.diff.md
 obora chat --session release-qa --once "/retry <executionId>"
 ```
 
