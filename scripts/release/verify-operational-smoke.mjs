@@ -517,6 +517,37 @@ const verifyCliChatOnceSmoke = async (tmpDir) => {
     'show-session text must not fall back to raw JSON without --json',
   );
 
+  const dryRunDetails = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --list-runs dry-run --json',
+    args: ['--json', 'chat', '--list-runs', '--session', sessionId],
+  });
+  assert(
+    dryRunDetails.some?.(
+      (detail) =>
+        detail.runSummary?.executionId === finalState.lastRunSummary?.executionId &&
+        detail.runTask === chatTask &&
+        detail.runSummary?.status === 'completed',
+    ) === true,
+    'chat dry-run list-runs must expose the stored dry-run detail',
+  );
+
+  const dryRunDetailText = await runCliText({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --show-run dry-run text',
+    args: ['chat', '--show-run', finalState.lastRunSummary.executionId, '--session', sessionId],
+  });
+  assert(
+    dryRunDetailText.includes(`Run ${finalState.lastRunSummary.executionId}`) &&
+      dryRunDetailText.includes('Status: completed') &&
+      dryRunDetailText.includes(`Task: ${chatTask}`) &&
+      dryRunDetailText.includes('Step details:') &&
+      dryRunDetailText.includes('No steps recorded.'),
+    'chat dry-run show-run text must expose the stored dry-run detail',
+  );
+
   const ttyCapturePath = join(tmpDir, 'chat-once-tty.txt');
   const ttyText = await runCliTtyText({
     cwd: projectDir,
