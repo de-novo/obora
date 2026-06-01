@@ -548,6 +548,41 @@ const verifyCliChatOnceSmoke = async (tmpDir) => {
     'chat dry-run show-run text must expose the stored dry-run detail',
   );
 
+  const dryRunRetryState = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat /retry dry-run --json',
+    args: [
+      '--json',
+      'chat',
+      'judge.yaml',
+      '--dry-run',
+      '--session',
+      sessionId,
+      '--once',
+      `/retry ${finalState.lastRunSummary.executionId}`,
+    ],
+  });
+  assert(
+    dryRunRetryState.lastRunSummary?.status === 'completed' &&
+      dryRunRetryState.lastRunSummary.completedStepCount === 0 &&
+      dryRunRetryState.lastRunSummary.totalStepCount === 0,
+    'chat dry-run retry must store a completed dry-run summary',
+  );
+  assert(
+    dryRunRetryState.lastRunSummary?.executionId?.startsWith?.(`dry-run-${sessionId}-`) === true &&
+      dryRunRetryState.lastRunSummary.executionId !== finalState.lastRunSummary.executionId,
+    'chat dry-run retry must create a new retryable dry-run execution id',
+  );
+  assert(
+    dryRunRetryState.lastRunTask === chatTask,
+    'chat dry-run retry must reuse the original task source',
+  );
+  assert(
+    dryRunRetryState.lastRunWorkflowLocator?.name === 'quickstart-judge',
+    'chat dry-run retry must preserve the original workflow locator',
+  );
+
   const ttyCapturePath = join(tmpDir, 'chat-once-tty.txt');
   const ttyText = await runCliTtyText({
     cwd: projectDir,
