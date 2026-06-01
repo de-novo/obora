@@ -119,6 +119,7 @@ describe("chat command metadata", () => {
         runChoices: [{ runSummary, sessionId: "session-a" }],
       })
     ).toEqual([
+      "Enter open  Tab next  Esc close  Ctrl+R retry",
       "/clear  /details 1  /retry 1  /details <runId>",
       "/runs  /session  /project  /help",
     ]);
@@ -128,6 +129,7 @@ describe("chat command metadata", () => {
         runChoices: [{ runSummary, sessionId: "session-a" }],
       })
     ).toEqual([
+      "Enter open  Tab next  Esc close  Ctrl+R retry",
       "/details open  /details next  /details prev  /retry open",
       "/details 1  /retry 1  /details <runId>",
       "/runs --project  /runs --tag <tag>  /runs failed",
@@ -147,6 +149,7 @@ describe("chat command metadata", () => {
         ],
       })
     ).toEqual([
+      "Enter open  Tab next  Esc close",
       "/session open  /session next  /session prev",
       "/session 1  /session <id>  /session rename 1 <id>",
       "/session delete 1  /sessions here  /clear",
@@ -169,6 +172,7 @@ describe("chat command metadata", () => {
         ],
       })
     ).toEqual([
+      "Enter open  Tab next  Esc close",
       "/workflow open  /workflow next  /workflow prev",
       "/workflow 1  /workflow <name>  /run #1 <task>",
       "/workflows [scope]  /project  /clear",

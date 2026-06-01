@@ -3,6 +3,8 @@ import type { ChatSessionState } from "./types.js";
 export interface ChatTuiKey {
   readonly name?: string;
   readonly value?: string;
+  readonly ctrl?: boolean;
+  readonly shift?: boolean;
 }
 
 type PickerKind = "run" | "session" | "workflow";
@@ -26,7 +28,11 @@ const pickerCommand = (picker: PickerKind, action: "next" | "prev" | "open"): st
       : `/workflow ${action}`;
 
 const keyAction = (key: ChatTuiKey): "next" | "prev" | "open" | undefined =>
-  key.name === "down"
+  key.name === "tab" && key.shift
+    ? "prev"
+    : key.name === "tab"
+      ? "next"
+      : key.name === "down"
     ? "next"
     : key.name === "up"
       ? "prev"
@@ -37,11 +43,35 @@ const keyAction = (key: ChatTuiKey): "next" | "prev" | "open" | undefined =>
         ? "open"
         : undefined;
 
+const hasOpenPanel = (state: ChatSessionState): boolean =>
+  Boolean(
+    state.inspectedRunSummary ||
+      state.runChoices?.length ||
+      state.sessionChoices?.length ||
+      state.workflowChoices?.length ||
+      state.showHelpPanel
+  );
+
+const commandForPanelKey = (
+  state: ChatSessionState,
+  picker: PickerKind | undefined,
+  key: ChatTuiKey
+): string | undefined =>
+  key.name === "escape" && hasOpenPanel(state)
+    ? "/clear"
+    : key.ctrl && key.name === "r"
+      ? picker === "run"
+        ? "/retry open"
+        : state.inspectedRunSummary || state.lastRunTask
+          ? "/retry"
+          : undefined
+      : undefined;
+
 export const commandForChatTuiKey = (
   state: ChatSessionState,
   key: ChatTuiKey
 ): string | undefined => {
   const picker = activePicker(state);
   const action = keyAction(key);
-  return picker && action ? pickerCommand(picker, action) : undefined;
+  return picker && action ? pickerCommand(picker, action) : commandForPanelKey(state, picker, key);
 };

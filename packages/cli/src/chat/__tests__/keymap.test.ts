@@ -62,7 +62,11 @@ describe("commandForChatTuiKey", () => {
 
     expect(commandForChatTuiKey(state, { name: "down" })).toBe("/details next");
     expect(commandForChatTuiKey(state, { name: "up" })).toBe("/details prev");
+    expect(commandForChatTuiKey(state, { name: "tab" })).toBe("/details next");
+    expect(commandForChatTuiKey(state, { name: "tab", shift: true })).toBe("/details prev");
     expect(commandForChatTuiKey(state, { name: "return" })).toBe("/details open");
+    expect(commandForChatTuiKey(state, { name: "r", ctrl: true })).toBe("/retry open");
+    expect(commandForChatTuiKey(state, { name: "escape" })).toBe("/clear");
   });
 
   it("maps keys for session and workflow pickers", () => {
@@ -85,9 +89,23 @@ describe("commandForChatTuiKey", () => {
 
   it("ignores non-picker states and unrelated keys", () => {
     expect(commandForChatTuiKey(baseState, { name: "down" })).toBeUndefined();
+    expect(commandForChatTuiKey(baseState, { name: "escape" })).toBeUndefined();
+    expect(commandForChatTuiKey(baseState, { name: "r", ctrl: true })).toBeUndefined();
     expect(
       commandForChatTuiKey({ ...baseState, sessionChoices: [sessionChoice] }, { name: "x" })
     ).toBeUndefined();
+  });
+
+  it("maps panel shortcuts without requiring a picker", () => {
+    expect(
+      commandForChatTuiKey(
+        { ...baseState, inspectedRunSummary: runSummary, lastRunTask: "ship release" },
+        { name: "r", ctrl: true }
+      )
+    ).toBe("/retry");
+    expect(
+      commandForChatTuiKey({ ...baseState, inspectedRunSummary: runSummary }, { name: "escape" })
+    ).toBe("/clear");
   });
 
   it("runs mapped picker commands through the keybinding callback", () => {
