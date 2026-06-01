@@ -51,6 +51,12 @@ const repeat = (char: string, count: number): string => char.repeat(Math.max(0, 
 
 const fit = (text: string, width: number): string => truncateToWidth(text, width, "…", true);
 
+const padRight = (line: string, width: number): string =>
+  `${line}${repeat(" ", width - visibleWidth(line))}`;
+
+const lineAt = (lines: ReadonlyArray<string>, index: number, width: number): string =>
+  padRight(lines[index] ?? "", width);
+
 const homeDir = process.env.HOME;
 
 const compactPath = (path: string, width: number): string =>
@@ -356,20 +362,55 @@ const renderRunInspector = (
 ): ReadonlyArray<string> => {
   const summary = inspectedRunSummary(state);
   return summary
+    ? card(
+        "run details",
+        [
+          ...runDetailHeaderLines(state, summary),
+          ...runDetailAttentionLines(summary),
+          "",
+          ...summary.steps.flatMap(runDetailStepLines),
+        ],
+        width
+      )
+    : [];
+};
+
+const sideBySide = (
+  left: ReadonlyArray<string>,
+  right: ReadonlyArray<string>,
+  leftWidth: number,
+  rightWidth: number
+): ReadonlyArray<string> =>
+  Array.from(
+    { length: Math.max(left.length, right.length) },
+    (_, index) =>
+      `${lineAt(left, index, leftWidth)} ${gray("│")} ${lineAt(right, index, rightWidth)}`
+  );
+
+const renderConversationArea = (
+  state: ChatSessionState,
+  width: number,
+  cardWidth: number
+): ReadonlyArray<string> => {
+  const inspector = renderRunInspector(state, cardWidth);
+  const shouldRenderSidePanel = inspector.length > 0 && width >= 128;
+  const leftWidth = Math.floor((width - 3) * 0.48);
+  const rightWidth = width - leftWidth - 3;
+  return shouldRenderSidePanel
     ? [
         "",
-        ...card(
-          "run details",
-          [
-            ...runDetailHeaderLines(state, summary),
-            ...runDetailAttentionLines(summary),
-            "",
-            ...summary.steps.flatMap(runDetailStepLines),
-          ],
-          width
+        ...sideBySide(
+          renderTranscript(state, leftWidth),
+          renderRunInspector(state, rightWidth),
+          leftWidth,
+          rightWidth
         ),
       ]
-    : [];
+    : [
+        "",
+        ...renderTranscript(state, cardWidth),
+        ...(inspector.length > 0 ? ["", ...inspector] : []),
+      ];
 };
 
 const runHistoryMarker = (state: ChatSessionState, summary: WorkflowRunSummary): string =>
@@ -646,9 +687,7 @@ export const renderChatView = (
     ...renderWorkflowPicker(state, cardWidth),
     ...renderRunHistory(state, cardWidth),
     ...renderHelpPanel(state, cardWidth),
-    "",
-    ...renderTranscript(state, cardWidth),
-    ...renderRunInspector(state, cardWidth),
+    ...renderConversationArea(state, width, cardWidth),
     "",
     ...renderMeta(state, cardWidth),
     ...renderPrompt(state, width),

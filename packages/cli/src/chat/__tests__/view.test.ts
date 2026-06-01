@@ -820,6 +820,28 @@ describe("renderChatView", () => {
     expect(plain).toContain("depends collect");
   });
 
+  it("opens inspected run details as a side panel on wide terminals", () => {
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-wide",
+            cwd: "/repo",
+            dryRun: false,
+          }),
+          inspectedRunSummary: runSummary,
+        },
+        { columns: 132 }
+      )
+    );
+    const plain = stripAnsi(output);
+
+    expect(plain).toContain("conversation");
+    expect(plain).toContain("│ ╭─ run details");
+    expect(plain).toContain("id exec-chat-1");
+    expect(plain.split("\n").every((line) => line.length <= 132)).toBe(true);
+  });
+
   it("keeps run history retry and compact options readable in narrow terminals", () => {
     const output = renderedText(
       renderChatView(
