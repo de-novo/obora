@@ -5,6 +5,7 @@ import { Command } from "commander";
 
 import { runChatSession } from "../chat/session.js";
 import {
+  formatChatRunAuditBundle,
   formatChatRunDetail,
   formatChatRunDiffPreview,
 } from "../chat/run-detail-format.js";
@@ -38,6 +39,17 @@ const saveDiffOutputPath = (detail: ChatRunDetail, outputPath: string): string =
     ? outputPath
     : resolve(detail.projectRoot ?? process.cwd(), outputPath);
 
+const saveChatRunOutput = async (
+  detail: ChatRunDetail,
+  outputPath: string,
+  body: string
+): Promise<string> => {
+  const resolvedPath = saveDiffOutputPath(detail, outputPath);
+  await mkdir(dirname(resolvedPath), { recursive: true });
+  await writeFile(resolvedPath, body, "utf-8");
+  return resolvedPath;
+};
+
 const saveChatRunDiffPreview = async (
   detail: ChatRunDetail,
   outputPath: string
@@ -49,11 +61,13 @@ const saveChatRunDiffPreview = async (
       ExitCode.CLI_ERROR
     );
   }
-  const resolvedPath = saveDiffOutputPath(detail, outputPath);
-  await mkdir(dirname(resolvedPath), { recursive: true });
-  await writeFile(resolvedPath, body, "utf-8");
-  return resolvedPath;
+  return saveChatRunOutput(detail, outputPath, body);
 };
+
+const saveChatRunAuditBundle = (
+  detail: ChatRunDetail,
+  outputPath: string
+): Promise<string> => saveChatRunOutput(detail, outputPath, formatChatRunAuditBundle(detail));
 
 const sessionRetryColumn = (session: ChatSessionSummaryGroup["sessions"][number]): string =>
   session.lastRunTask && session.lastRunWorkflowName ? session.lastRunWorkflowName : "-";
@@ -94,6 +108,7 @@ export function createChatCommand(): Command {
     .option("--list-runs", "List persisted workflow runs, optionally scoped by --session")
     .option("--show-run <executionId>", "Show a persisted workflow run summary by execution id")
     .option("--save-diff <path>", "With --show-run, save repository diff preview to a file")
+    .option("--save-audit <path>", "With --show-run, save a chat run audit bundle to a file")
     .option("--once <message>", "Run one chat message and exit")
     .option("--dry-run", "Validate the selected workflow without live execution")
     .option("--provider <name>", "LLM provider override for workflow runs")
@@ -114,6 +129,9 @@ export function createChatCommand(): Command {
         async () => {
           if (options.saveDiff && !options.showRun) {
             throw new CLIError("--save-diff requires --show-run <executionId>", ExitCode.CLI_ERROR);
+          }
+          if (options.saveAudit && !options.showRun) {
+            throw new CLIError("--save-audit requires --show-run <executionId>", ExitCode.CLI_ERROR);
           }
 
           if (options.listSessions) {
@@ -218,11 +236,25 @@ export function createChatCommand(): Command {
             const savedDiffPath = options.saveDiff
               ? await saveChatRunDiffPreview(detail, options.saveDiff)
               : undefined;
+            const savedAuditPath = options.saveAudit
+              ? await saveChatRunAuditBundle(detail, options.saveAudit)
+              : undefined;
             if (options.json || globalOpts.json) {
-              formatter.json(savedDiffPath ? { ...detail, savedDiffPath } : detail);
+              formatter.json(
+                savedDiffPath || savedAuditPath
+                  ? {
+                      ...detail,
+                      ...(savedDiffPath ? { savedDiffPath } : {}),
+                      ...(savedAuditPath ? { savedAuditPath } : {}),
+                    }
+                  : detail
+              );
             } else {
               if (savedDiffPath) {
                 console.log(`Saved repository diff preview: ${savedDiffPath}`);
+              }
+              if (savedAuditPath) {
+                console.log(`Saved chat run audit bundle: ${savedAuditPath}`);
               }
               console.log(formatChatRunDetail(detail));
             }

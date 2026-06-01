@@ -27,6 +27,13 @@ const valueLine = (
 ): string | undefined =>
   labeledLine(label, joinedPreviewValues(items, separator));
 
+const markdownValueLine = (
+  label: string,
+  items: ReadonlyArray<string> | undefined,
+  separator = ", "
+): string =>
+  `- ${label}: ${joinedPreviewValues(items, separator) ?? "None"}`;
+
 const optionalLine = (label: string, value: string | undefined): string | undefined =>
   labeledLine(label, value ? preview(value) : undefined);
 
@@ -62,6 +69,25 @@ const formatFileChange = (
   ...(file.diffPreview && file.diffPreview.length > 0
     ? file.diffPreview.map((line) => `    ${preview(line)}`)
     : ["    No diff preview recorded."]),
+];
+
+const formatAuditStep = (step: WorkflowRunStepSummary, index: number): ReadonlyArray<string> => [
+  `### ${index + 1}. ${step.name}`,
+  "",
+  `- Status: ${step.status}`,
+  ...(step.agent ? [`- Agent: ${step.agent}`] : []),
+  ...(step.model ? [`- Model: ${step.model}`] : []),
+  ...(step.task ? [`- Task: ${preview(step.task)}`] : []),
+  `- Output: ${preview(step.outputPreview)}`,
+  `- Format: ${step.outputFormat}`,
+  ...(step.methodology ? [`- Method: ${preview(step.methodology)}`] : []),
+  ...(step.rationale ? [`- Rationale: ${preview(step.rationale)}`] : []),
+  markdownValueLine("Tools", step.toolsUsed),
+  markdownValueLine("Artifacts", step.artifacts),
+  markdownValueLine("Decisions", step.decisions, "; "),
+  markdownValueLine("Dependencies", step.dependencies),
+  markdownValueLine("Issues", step.issues, "; "),
+  "",
 ];
 
 export const formatChatRunDetail = (detail: ChatRunDetail): string =>
@@ -136,3 +162,65 @@ export const formatChatRunDiffPreview = (detail: ChatRunDetail): string | undefi
         "",
       ].join("\n")
     : undefined;
+
+export const formatChatRunAuditBundle = (detail: ChatRunDetail): string =>
+  [
+    "# Chat Run Audit Bundle",
+    "",
+    `Execution: ${detail.runSummary.executionId}`,
+    `Session: ${detail.sessionId}`,
+    ...(detail.projectRoot ? [`Project: ${detail.projectRoot}`] : []),
+    `Message: ${detail.messageId} at ${detail.messageCreatedAt}`,
+    `Workflow: ${detail.runSummary.workflowName}`,
+    `Status: ${detail.runSummary.status}`,
+    `Steps: ${detail.runSummary.completedStepCount}/${detail.runSummary.totalStepCount}`,
+    `Started: ${detail.runSummary.startedAt}`,
+    ...(detail.runSummary.endedAt ? [`Ended: ${detail.runSummary.endedAt}`] : []),
+    ...(detail.runSummary.durationMs === undefined
+      ? []
+      : [`Duration: ${detail.runSummary.durationMs}ms`]),
+    ...(detail.runTask ? [`Task: ${detail.runTask}`] : []),
+    ...(formatChatRunOptions(detail.runOptions)
+      ? [`Run options: ${formatChatRunOptions(detail.runOptions)}`]
+      : []),
+    ...(detail.workflowTarget ? [`Workflow target: ${detail.workflowTarget}`] : []),
+    `Retry: ${formatRetryWorkflowName(detail)}`,
+    ...(detail.runWorkflowLocator
+      ? [
+          `Workflow locator: ${detail.runWorkflowLocator.name} (${detail.runWorkflowLocator.displayPath})`,
+        ]
+      : []),
+    `Summary: ${detail.runSummary.message}`,
+    ...(detail.runSummary.error ? [`Error: ${detail.runSummary.error}`] : []),
+    "",
+    "## Step Audit",
+    "",
+    ...(detail.runSummary.steps.length > 0
+      ? detail.runSummary.steps.flatMap(formatAuditStep)
+      : ["No steps recorded.", ""]),
+    ...(detail.runSummary.repositoryChanges
+      ? [
+          "## Repository Changes",
+          "",
+          `Repository root: ${detail.runSummary.repositoryChanges.root}`,
+          `Summary: ${detail.runSummary.repositoryChanges.summary}`,
+          "",
+          "```diff",
+          ...detail.runSummary.repositoryChanges.files.flatMap((file, index) => [
+            fileChangeTitle(file, index),
+            ...(file.diffPreview && file.diffPreview.length > 0
+              ? file.diffPreview
+              : ["No diff preview recorded."]),
+            "",
+          ]),
+          "```",
+          "",
+        ]
+      : []),
+    "## Raw Detail",
+    "",
+    "```json",
+    JSON.stringify(detail, null, 2),
+    "```",
+    "",
+  ].join("\n");

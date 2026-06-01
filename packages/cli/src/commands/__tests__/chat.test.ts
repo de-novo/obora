@@ -497,6 +497,163 @@ describe("chat command", () => {
     );
   });
 
+  it("saves a persisted chat run audit bundle", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-chat-show-run-audit-"));
+    const outputPath = join(dir, "audit", "run.md");
+    vi.mocked(findChatRunDetail).mockResolvedValue({
+      sessionId: "session-a",
+      projectRoot: dir,
+      messageId: "assistant:run",
+      messageCreatedAt: "2026-05-24T00:00:01.000Z",
+      runTask: "prepare release",
+      runSummary: {
+        executionId: "exec-audit",
+        workflowName: "release-readiness",
+        status: "completed",
+        startedAt: "2026-05-24T00:00:00.000Z",
+        completedStepCount: 1,
+        totalStepCount: 1,
+        message: "Workflow completed: 1/1 steps completed.",
+        repositoryChanges: {
+          root: dir,
+          files: [{ status: "M", path: "README.md", diffPreview: ["+audit"] }],
+          summary: "1 file changed: modified README.md",
+        },
+        steps: [
+          {
+            name: "collect",
+            status: "completed",
+            agent: "developer",
+            model: "openrouter/owl-alpha",
+            task: "Collect context",
+            outputPreview: "Collected repository context.",
+            outputFormat: "text",
+            methodology: "Inspect persisted session",
+            rationale: "The release needs audit context.",
+            toolsUsed: ["file_read"],
+            artifacts: ["README.md"],
+            decisions: ["Use saved chat run"],
+            dependencies: ["bootstrap"],
+            issues: ["none"],
+          },
+        ],
+      },
+    });
+
+    await createChatCommand().parseAsync(
+      ["--show-run", "exec-audit", "--save-audit", "audit/run.md"],
+      { from: "user" }
+    );
+
+    await expect(readFile(outputPath, "utf-8")).resolves.toContain("# Chat Run Audit Bundle");
+    await expect(readFile(outputPath, "utf-8")).resolves.toContain("- Tools: file_read");
+    await expect(readFile(outputPath, "utf-8")).resolves.toContain("+audit");
+    expect(console.log).toHaveBeenCalledWith(`Saved chat run audit bundle: ${outputPath}`);
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Run exec-audit"));
+  });
+
+  it("includes the saved audit path in JSON show-run output", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-chat-show-run-audit-json-"));
+    vi.mocked(findChatRunDetail).mockResolvedValue({
+      sessionId: "session-a",
+      projectRoot: dir,
+      messageId: "assistant:run",
+      messageCreatedAt: "2026-05-24T00:00:01.000Z",
+      runSummary: {
+        executionId: "exec-audit-json",
+        workflowName: "release-readiness",
+        status: "completed",
+        startedAt: "2026-05-24T00:00:00.000Z",
+        completedStepCount: 0,
+        totalStepCount: 0,
+        message: "Workflow completed: 0/0 steps completed.",
+        steps: [],
+      },
+    });
+
+    await createChatCommand().parseAsync(
+      ["--show-run", "exec-audit-json", "--save-audit", "audit/run.md", "--json"],
+      { from: "user" }
+    );
+
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"savedAuditPath"'));
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining(join(dir, "audit", "run.md"))
+    );
+  });
+
+  it("includes saved diff and audit paths in JSON show-run output", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-chat-show-run-diff-audit-json-"));
+    vi.mocked(findChatRunDetail).mockResolvedValue({
+      sessionId: "session-a",
+      projectRoot: dir,
+      messageId: "assistant:run",
+      messageCreatedAt: "2026-05-24T00:00:01.000Z",
+      runSummary: {
+        executionId: "exec-diff-audit-json",
+        workflowName: "release-readiness",
+        status: "completed",
+        startedAt: "2026-05-24T00:00:00.000Z",
+        completedStepCount: 0,
+        totalStepCount: 0,
+        message: "Workflow completed: 0/0 steps completed.",
+        repositoryChanges: {
+          root: dir,
+          files: [{ status: "M", path: "README.md", diffPreview: ["+both"] }],
+          summary: "1 file changed: modified README.md",
+        },
+        steps: [],
+      },
+    });
+
+    await createChatCommand().parseAsync(
+      [
+        "--show-run",
+        "exec-diff-audit-json",
+        "--save-diff",
+        "audit/run.diff.md",
+        "--save-audit",
+        "audit/run.md",
+        "--json",
+      ],
+      { from: "user" }
+    );
+
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"savedDiffPath"'));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"savedAuditPath"'));
+  });
+
+  it("saves a relative audit bundle path from the current directory without project metadata", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-chat-show-run-audit-cwd-"));
+    const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(dir);
+    vi.mocked(findChatRunDetail).mockResolvedValue({
+      sessionId: "session-a",
+      messageId: "assistant:run",
+      messageCreatedAt: "2026-05-24T00:00:01.000Z",
+      runSummary: {
+        executionId: "exec-audit-cwd",
+        workflowName: "release-readiness",
+        status: "completed",
+        startedAt: "2026-05-24T00:00:00.000Z",
+        completedStepCount: 0,
+        totalStepCount: 0,
+        message: "Workflow completed: 0/0 steps completed.",
+        steps: [],
+      },
+    });
+
+    await createChatCommand().parseAsync(
+      ["--show-run", "exec-audit-cwd", "--save-audit", "audit/run.md"],
+      { from: "user" }
+    );
+
+    await expect(readFile(join(dir, "audit", "run.md"), "utf-8")).resolves.toContain(
+      "Execution: exec-audit-cwd"
+    );
+    expect(cwdSpy).toHaveBeenCalled();
+    cwdSpy.mockRestore();
+  });
+
   it("saves a persisted chat run repository diff preview to an absolute path", async () => {
     const dir = await mkdtemp(join(tmpdir(), "obora-chat-show-run-diff-absolute-"));
     const outputPath = join(dir, "absolute.diff.md");
@@ -564,6 +721,14 @@ describe("chat command", () => {
 
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining("--save-diff requires --show-run <executionId>")
+    );
+  });
+
+  it("requires --show-run before saving a chat run audit bundle", async () => {
+    await createChatCommand().parseAsync(["--save-audit", "audit/run.md"], { from: "user" });
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("--save-audit requires --show-run <executionId>")
     );
   });
 

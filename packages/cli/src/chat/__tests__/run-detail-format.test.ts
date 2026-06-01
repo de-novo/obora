@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatChatRunAuditBundle,
   formatChatRunDetail,
   formatChatRunDiffPreview,
 } from "../run-detail-format.js";
@@ -122,6 +123,84 @@ describe("formatChatRunDetail", () => {
     expect(text).toContain("```diff");
     expect(text).toContain("1. M README.md");
     expect(text).toContain("+new line");
+  });
+
+  it("formats an audit bundle with step outputs, tools, artifacts, and raw detail", () => {
+    const text = formatChatRunAuditBundle(fullDetail);
+
+    expect(text).toContain("# Chat Run Audit Bundle");
+    expect(text).toContain("Execution: exec-123");
+    expect(text).toContain("Session: session-a");
+    expect(text).toContain("Task: prepare release");
+    expect(text).toContain(
+      "Run options: provider openrouter · model openrouter/owl-alpha · config /repo/.obora/config.yaml · agents /repo/agents.yaml · policy /repo/policy.yaml · timeout 2500ms"
+    );
+    expect(text).toContain("## Step Audit");
+    expect(text).toContain("### 1. collect");
+    expect(text).toContain("- Status: completed");
+    expect(text).toContain("- Output: Collected repository context.");
+    expect(text).toContain("- Tools: file_read");
+    expect(text).toContain("- Artifacts: README.md");
+    expect(text).toContain("- Decisions: Use saved chat run");
+    expect(text).toContain("- Dependencies: bootstrap");
+    expect(text).toContain("- Issues: none");
+    expect(text).toContain("## Repository Changes");
+    expect(text).toContain("1. M README.md");
+    expect(text).toContain("## Raw Detail");
+    expect(text).toContain('"executionId": "exec-123"');
+  });
+
+  it("formats an audit bundle for legacy runs without optional metadata", () => {
+    const text = formatChatRunAuditBundle({
+      sessionId: "legacy-session",
+      messageId: "assistant:legacy",
+      messageCreatedAt: "2026-05-24T00:00:01.000Z",
+      runSummary: {
+        executionId: "exec-legacy",
+        workflowName: "legacy-workflow",
+        status: "completed",
+        startedAt: "2026-05-24T00:00:00.000Z",
+        completedStepCount: 0,
+        totalStepCount: 0,
+        message: "Workflow completed: 0/0 steps completed.",
+        steps: [],
+      },
+    });
+
+    expect(text).toContain("# Chat Run Audit Bundle");
+    expect(text).toContain("Retry: not available");
+    expect(text).toContain("No steps recorded.");
+    expect(text).toContain("## Raw Detail");
+    expect(text).not.toContain("Project:");
+    expect(text).not.toContain("Task:");
+    expect(text).not.toContain("Run options:");
+    expect(text).not.toContain("Repository Changes");
+  });
+
+  it("formats an audit bundle step with missing audit lists as none", () => {
+    const text = formatChatRunAuditBundle({
+      ...fullDetail,
+      runSummary: {
+        ...fullDetail.runSummary,
+        steps: [
+          {
+            name: "minimal",
+            status: "completed",
+            outputPreview: "done",
+            outputFormat: "text",
+          },
+        ],
+      },
+    });
+
+    expect(text).toContain("### 1. minimal");
+    expect(text).toContain("- Tools: None");
+    expect(text).toContain("- Artifacts: None");
+    expect(text).toContain("- Decisions: None");
+    expect(text).toContain("- Dependencies: None");
+    expect(text).toContain("- Issues: None");
+    expect(text).not.toContain("- Agent:");
+    expect(text).not.toContain("- Task:");
   });
 
   it("does not format a standalone diff document without repository changes", () => {
