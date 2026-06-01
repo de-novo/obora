@@ -372,7 +372,17 @@ const verifyCliChatRunHistorySmoke = async (tmpDir) => {
     cwd: projectDir,
     env,
     label: 'obora chat live --once --json',
-    args: ['--json', 'chat', 'workflow.yaml', '--session', sessionId, '--once', chatTask],
+    args: [
+      '--json',
+      'chat',
+      'workflow.yaml',
+      '--session',
+      sessionId,
+      '--tags',
+      'smoke-run,release',
+      '--once',
+      chatTask,
+    ],
   });
   const executionId = finalState.lastRunSummary?.executionId;
   assert(finalState.dryRun === false, 'live chat smoke must not run in dry-run mode');
@@ -382,6 +392,7 @@ const verifyCliChatRunHistorySmoke = async (tmpDir) => {
     finalState.lastRunTask === chatTask,
     'live chat smoke must preserve the chat task as retry input',
   );
+  const runProjectRoot = finalState.projectRoot ?? projectDir;
 
   const runs = await runCliJson({
     cwd: projectDir,
@@ -398,6 +409,55 @@ const verifyCliChatRunHistorySmoke = async (tmpDir) => {
         detail.runTask === chatTask,
     ),
     'chat run list must include the saved live run and task',
+  );
+
+  const filteredRuns = await runCliJson({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --list-runs filtered --json after live run',
+    args: [
+      '--json',
+      'chat',
+      '--list-runs',
+      '--filter-project',
+      'current',
+      '--filter-tag',
+      'smoke-run',
+      '--filter-run-status',
+      'completed',
+    ],
+  });
+  assert(
+    filteredRuns.some(
+      (detail) =>
+        detail.runSummary?.executionId === executionId &&
+        detail.projectRoot === runProjectRoot &&
+        detail.runTask === chatTask,
+    ),
+    'filtered chat run list must include the saved run with project, tag, and status filters',
+  );
+
+  const filteredRunsText = await runCliText({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --list-runs filtered text after live run',
+    args: [
+      'chat',
+      '--list-runs',
+      '--filter-project',
+      'current',
+      '--filter-tag',
+      'smoke-run',
+      '--filter-run-status',
+      'completed',
+    ],
+  });
+  assert(
+    filteredRunsText.includes(executionId) &&
+      filteredRunsText.includes(runProjectRoot) &&
+      filteredRunsText.includes('smoke-chat-run-workflow') &&
+      filteredRunsText.includes(chatTask),
+    'filtered chat run list text must include execution, project, workflow, and task metadata',
   );
 
   const detail = await runCliJson({
