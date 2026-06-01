@@ -301,6 +301,7 @@ const runDetailHeaderLines = (
   const options = inspectedRunOptions(state, summary, choice);
   const projectRoot = inspectedRunProjectRoot(state, summary, choice);
   return [
+    `${green("active")} ${muted("close")} Esc   ${muted("retry")} Ctrl+R   ${muted("history")} /runs`,
     `${muted("id")} ${summary.executionId}   ${muted("status")} ${summary.status}   ${muted("steps")} ${summary.completedStepCount}/${summary.totalStepCount}`,
     `${muted("workflow")} ${summary.workflowName}   ${formatRunDuration(summary)}`,
     `${muted("task")} ${task ? formatRunTaskPreview(task) : "-"}`,
@@ -443,12 +444,36 @@ const renderRunHistorySource = (state: ChatSessionState, choice: ChatRunChoice):
       : []),
   ].join("   ");
 
+const runChoiceVisualState = (
+  state: ChatSessionState,
+  summary: WorkflowRunSummary,
+  index: number
+): string =>
+  [
+    state.selectedRunChoiceIndex === index ? "selected" : undefined,
+    state.inspectedRunSummary?.executionId === summary.executionId ? "open" : undefined,
+  ]
+    .filter((item): item is string => Boolean(item))
+    .join("+") || "idle";
+
+const runChoiceStateLabel = (state: string): string =>
+  state === "idle" ? muted("idle") : green(state);
+
+const runChoiceStateLine = (
+  state: ChatSessionState,
+  summary: WorkflowRunSummary,
+  index: number
+): string =>
+  `${muted("state")} ${runChoiceStateLabel(runChoiceVisualState(state, summary, index))}`;
+
 const renderRunHistoryMeta = (
   state: ChatSessionState,
-  choice: ChatRunChoice
+  choice: ChatRunChoice,
+  index: number
 ): ReadonlyArray<string> => {
   const summary = runChoiceSummary(choice);
   return [
+    runChoiceStateLine(state, summary, index),
     [
       renderRunHistorySource(state, choice),
       `${muted("task")} ${formatRunTaskPreview(choice.runTask)}`,
@@ -491,7 +516,7 @@ const renderRunHistory = (
               .slice(0, 8)
               .flatMap((choice, index) => [
                 renderRunHistoryLine(state, choice, index),
-                ...renderRunHistoryMeta(state, choice),
+                ...renderRunHistoryMeta(state, choice, index),
               ]),
           ],
           width

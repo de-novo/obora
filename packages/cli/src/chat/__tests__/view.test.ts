@@ -362,6 +362,8 @@ describe("renderChatView", () => {
     expect(plain).toContain("/runs failed");
     expect(plain).toContain("› ● #1 exec-chat-1 completed release-readiness steps 2/2");
     expect(plain).toContain("○ #2 exec-chat-2 completed code-review steps 1/2");
+    expect(plain).toContain("state selected+open");
+    expect(plain).toContain("state idle");
     expect(plain).toContain("session session-a");
     expect(plain).toContain("session history-session");
     expect(plain).toContain("project /repo/history-project");
@@ -809,6 +811,7 @@ describe("renderChatView", () => {
 
     const plain = stripAnsi(output);
     expect(plain).toContain("run details");
+    expect(plain).toContain("active close Esc retry Ctrl+R history /runs");
     expect(plain).toContain("project /repo/source-project");
     expect(plain).toContain(
       "options provider openrouter · model openrouter/owl-alpha · timeout 2500ms · files+3"
@@ -838,6 +841,7 @@ describe("renderChatView", () => {
 
     expect(plain).toContain("conversation");
     expect(plain).toContain("│ ╭─ run details");
+    expect(plain).toContain("active close Esc retry Ctrl+R history /runs");
     expect(plain).toContain("id exec-chat-1");
     expect(plain.split("\n").every((line) => line.length <= 132)).toBe(true);
   });
