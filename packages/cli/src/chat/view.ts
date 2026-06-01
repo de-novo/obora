@@ -228,6 +228,11 @@ const activityLines = (state: ChatSessionState): ReadonlyArray<string> => [
     state.lastRunTask
   )}`,
   `${muted("last result")} ${state.lastRunSummary ? `${state.lastRunSummary.status} ${state.lastRunSummary.completedStepCount}/${state.lastRunSummary.totalStepCount}` : "none"}`,
+  ...(state.inspectedRunSummary
+    ? [
+        `${muted("open run")} ${state.inspectedRunSummary.status} ${state.inspectedRunSummary.completedStepCount}/${state.inspectedRunSummary.totalStepCount} ${state.inspectedRunSummary.executionId}`,
+      ]
+    : []),
   `${muted("error")} ${state.lastError ? red(state.lastError) : "none"}`,
   `${muted("turns")} ${state.messages.filter((message) => message.role === "user").length}`,
   `${muted("audit")} command, workflow, cwd, provider, and model are visible`,

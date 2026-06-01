@@ -370,6 +370,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("switch /session history-session");
     expect(plain).toContain("open /details exec-chat-1");
     expect(plain).toContain("viewing run exec-chat-1");
+    expect(plain).toContain("open run completed 2/2 exec-chat-1");
     expect(plain).toContain("/clear  /details 1  /retry 1  /details <runId>");
     expect(plain).toContain("/runs  /session  /project  /help");
   });

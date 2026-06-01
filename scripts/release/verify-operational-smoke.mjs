@@ -969,6 +969,10 @@ const verifyCliChatTuiLayoutSmoke = async () => {
   assert(plain.includes('retry layout-workflow'), 'TUI run history must keep retry value visible');
   assert(plain.includes('state selected+open'), 'TUI run history must label the selected open run');
   assert(
+    plain.includes('open run completed 0/0 exec-layout-1'),
+    'TUI workflow metadata must show the currently open run result',
+  );
+  assert(
     plain.includes('active close Esc retry Ctrl+R history /runs'),
     'TUI run detail panel must show active keyboard actions',
   );
