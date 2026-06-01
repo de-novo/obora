@@ -1,5 +1,10 @@
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
-import type { WorkflowLocator, WorkflowRunStepSummary, WorkflowRunSummary } from "@obora/sdk";
+import type {
+  WorkflowLocator,
+  WorkflowRunFileChange,
+  WorkflowRunStepSummary,
+  WorkflowRunSummary,
+} from "@obora/sdk";
 
 import { chatCommandHelpSections, chatPromptCommandRows } from "./commands.js";
 import { runChoiceSummary } from "./run-choices.js";
@@ -421,6 +426,25 @@ const runDetailStepLines = (
       : undefined,
   ].filter((line): line is string => Boolean(line));
 
+const runDetailFileChangeLines = (
+  file: WorkflowRunFileChange,
+  index: number
+): ReadonlyArray<string> => [
+  `${cyan(`#${index + 1}`)} ${bold(file.path)} ${muted(file.status)}`,
+  ...(file.diffPreview && file.diffPreview.length > 0
+    ? file.diffPreview.map((line) => `${muted("diff")} ${line}`)
+    : [`${muted("diff")} no preview recorded`]),
+];
+
+const runDetailRepositoryLines = (summary: WorkflowRunSummary): ReadonlyArray<string> =>
+  summary.repositoryChanges
+    ? [
+        "",
+        `${muted("repository diff preview")} ${compactPath(summary.repositoryChanges.root, 72)}`,
+        ...summary.repositoryChanges.files.flatMap(runDetailFileChangeLines),
+      ]
+    : [];
+
 const renderRunInspector = (
   state: ChatSessionState,
   width: number
@@ -434,6 +458,7 @@ const renderRunInspector = (
           ...runDetailAttentionLines(summary),
           "",
           ...summary.steps.flatMap(runDetailStepLines),
+          ...runDetailRepositoryLines(summary),
         ],
         width
       )

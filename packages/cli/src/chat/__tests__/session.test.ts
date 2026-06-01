@@ -200,11 +200,23 @@ describe("chat session", () => {
 
     expect(result.state.lastRunSummary?.repositoryChanges).toMatchObject({
       root: await realpath(dir),
-      files: [{ status: "??", path: "src/generated.js", additions: 1 }],
+      files: [
+        {
+          status: "??",
+          path: "src/generated.js",
+          additions: 1,
+          diffPreview: ["+console.log('generated');"],
+        },
+      ],
       summary: "1 file changed: untracked src/generated.js (+1/-0)",
     });
     expect(result.state.messages.at(-1)?.runSummary?.repositoryChanges?.files).toEqual([
-      { status: "??", path: "src/generated.js", additions: 1 },
+      {
+        status: "??",
+        path: "src/generated.js",
+        additions: 1,
+        diffPreview: ["+console.log('generated');"],
+      },
     ]);
   });
 

@@ -45,7 +45,14 @@ describe("repository change snapshots", () => {
 
     expect(changes).toMatchObject({
       root: await realpath(dir),
-      files: [{ status: "??", path: "src/generated.js", additions: 1 }],
+      files: [
+        {
+          status: "??",
+          path: "src/generated.js",
+          additions: 1,
+          diffPreview: ["+console.log('generated');"],
+        },
+      ],
       summary: "1 file changed: untracked src/generated.js (+1/-0)",
     });
   });
@@ -71,7 +78,7 @@ describe("repository change snapshots", () => {
     const changes = await detectRepositoryChanges(dir, before);
 
     expect(changes).toMatchObject({
-      files: [{ status: "??", path: "empty.txt", additions: 0 }],
+      files: [{ status: "??", path: "empty.txt", additions: 0, diffPreview: ["+<empty file>"] }],
       summary: "1 file changed: untracked empty.txt (+0/-0)",
     });
   });
@@ -90,6 +97,28 @@ describe("repository change snapshots", () => {
       summary: "1 file changed: untracked broken-link",
     });
     expect(changes?.files[0]).not.toHaveProperty("additions");
+    expect(changes?.files[0]).not.toHaveProperty("diffPreview");
+  });
+
+  it("keeps tracked files when git cannot render a diff preview for the pathspec", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-repo-pathspec-"));
+    await execFileAsync("git", ["init"], { cwd: dir });
+    await execFileAsync("git", ["config", "user.email", "test@example.com"], { cwd: dir });
+    await execFileAsync("git", ["config", "user.name", "Obora Test"], { cwd: dir });
+    await writeFile(join(dir, ":(bad"), "before\n", "utf8");
+    await execFileAsync("git", ["add", "."], { cwd: dir });
+    await execFileAsync("git", ["commit", "-m", "initial"], { cwd: dir });
+    const before = await captureRepositorySnapshot(dir);
+
+    await writeFile(join(dir, ":(bad"), "after\n", "utf8");
+
+    const changes = await detectRepositoryChanges(dir, before);
+
+    expect(changes).toMatchObject({
+      files: [{ status: "M", path: ":(bad", additions: 1, deletions: 1 }],
+      summary: "1 file changed: modified :(bad (+1/-1)",
+    });
+    expect(changes?.files[0]).not.toHaveProperty("diffPreview");
   });
 
   it("summarizes tracked added, modified, deleted, and renamed files", async () => {
@@ -126,5 +155,14 @@ describe("repository change snapshots", () => {
     expect(changes?.summary).toContain("modified modified.md (+1/-1)");
     expect(changes?.summary).toContain("deleted deleted.md (+0/-1)");
     expect(changes?.summary).toContain("renamed renamed.md -> renamed-next.md");
+    expect(
+      changes?.files.find((file) => file.path === "modified.md")?.diffPreview
+    ).toEqual(expect.arrayContaining(["-before", "+after"]));
+    expect(changes?.files.find((file) => file.path === "added.md")?.diffPreview).toContain(
+      "+after"
+    );
+    expect(changes?.files.find((file) => file.path === "deleted.md")?.diffPreview).toContain(
+      "-before"
+    );
   });
 });

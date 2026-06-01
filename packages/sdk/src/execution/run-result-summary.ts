@@ -24,6 +24,7 @@ export interface WorkflowRunFileChange {
   readonly path: string;
   readonly additions?: number;
   readonly deletions?: number;
+  readonly diffPreview?: ReadonlyArray<string>;
 }
 
 export interface WorkflowRunRepositoryChanges {

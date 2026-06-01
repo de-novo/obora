@@ -204,8 +204,19 @@ describe("renderChatView", () => {
       repositoryChanges: {
         root: "/repo",
         files: [
-          { status: "M", path: "README.md", additions: 3, deletions: 1 },
-          { status: "??", path: "src/generated.js", additions: 1 },
+          {
+            status: "M",
+            path: "README.md",
+            additions: 3,
+            deletions: 1,
+            diffPreview: ["@@ -1 +1 @@", "-old", "+new"],
+          },
+          {
+            status: "??",
+            path: "src/generated.js",
+            additions: 1,
+            diffPreview: ["+console.log('generated');"],
+          },
         ],
         summary: "2 files changed: modified README.md (+3/-1), untracked src/generated.js (+1/-0)",
       },
@@ -232,6 +243,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("changed README.md, src/generated.js");
     expect(plain).toContain("details /details exec-chat-1");
     expect(plain).not.toContain("2 files changed: modified README.md (+3/-1)");
+    expect(plain).not.toContain("console.log('generated');");
   });
 
   it("keeps session picker actions and retry metadata readable in narrow terminals", () => {
@@ -555,7 +567,15 @@ describe("renderChatView", () => {
       totalStepCount: 1,
       repositoryChanges: {
         root: "/repo/source-project",
-        files: [{ status: "M", path: "review.md", additions: 5, deletions: 2 }],
+        files: [
+          {
+            status: "M",
+            path: "review.md",
+            additions: 5,
+            deletions: 2,
+            diffPreview: ["@@ -1,2 +1,5 @@", "-old review", "+new review"],
+          },
+        ],
         summary: "1 file changed: modified review.md (+5/-2)",
       },
       steps: [
@@ -624,6 +644,11 @@ describe("renderChatView", () => {
     expect(plain).toContain("path .obora/workflows/code-review.yaml");
     expect(plain).toContain("changed 1 file changed: modified review.md (+5/-2)");
     expect(plain).toContain("change root /repo/source-project");
+    expect(plain).toContain("repository diff preview /repo/source-project");
+    expect(plain).toContain("#1 review.md M");
+    expect(plain).toContain("diff @@ -1,2 +1,5 @@");
+    expect(plain).toContain("diff -old review");
+    expect(plain).toContain("diff +new review");
     expect(plain).toContain("viewing run exec-inspected");
     expect(plain).toContain("viewing run exec-inspected  ·  /details exec-inspected");
     expect(plain).toContain("/clear  /details 1  /retry 1  /details <runId>");

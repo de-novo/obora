@@ -1,4 +1,4 @@
-import type { WorkflowRunStepSummary } from "@obora/sdk";
+import type { WorkflowRunFileChange, WorkflowRunStepSummary } from "@obora/sdk";
 
 import { formatChatRunOptions } from "./run-options-format.js";
 import type { ChatRunDetail } from "./store.js";
@@ -51,6 +51,19 @@ const formatStep = (step: WorkflowRunStepSummary, index: number): ReadonlyArray<
 const formatRetryWorkflowName = (detail: ChatRunDetail): string =>
   detail.runTask ? (detail.runWorkflowLocator?.name ?? detail.runSummary.workflowName) : "not available";
 
+const fileChangeTitle = (file: WorkflowRunFileChange, index: number): string =>
+  `  ${index + 1}. ${file.status} ${file.path}`;
+
+const formatFileChange = (
+  file: WorkflowRunFileChange,
+  index: number
+): ReadonlyArray<string> => [
+  fileChangeTitle(file, index),
+  ...(file.diffPreview && file.diffPreview.length > 0
+    ? file.diffPreview.map((line) => `    ${preview(line)}`)
+    : ["    No diff preview recorded."]),
+];
+
 export const formatChatRunDetail = (detail: ChatRunDetail): string =>
   [
     `Run ${detail.runSummary.executionId}`,
@@ -89,4 +102,11 @@ export const formatChatRunDetail = (detail: ChatRunDetail): string =>
     ...(detail.runSummary.steps.length > 0
       ? detail.runSummary.steps.flatMap(formatStep)
       : ["  No steps recorded."]),
+    ...(detail.runSummary.repositoryChanges
+      ? [
+          "",
+          "Repository diff preview:",
+          ...detail.runSummary.repositoryChanges.files.flatMap(formatFileChange),
+        ]
+      : []),
   ].join("\n");

@@ -41,7 +41,15 @@ const fullDetail: ChatRunDetail = {
     message: "Workflow completed: 1/1 steps completed.",
     repositoryChanges: {
       root: "/repo/source-project",
-      files: [{ status: "M", path: "README.md", additions: 3, deletions: 1 }],
+      files: [
+        {
+          status: "M",
+          path: "README.md",
+          additions: 3,
+          deletions: 1,
+          diffPreview: ["@@ -1,2 +1,4 @@", "-old line", "+new line"],
+        },
+      ],
       summary: "1 file changed: modified README.md (+3/-1)",
     },
     steps: [
@@ -81,6 +89,11 @@ describe("formatChatRunDetail", () => {
     expect(text).toContain("Workflow locator: release-readiness (.obora/workflows/release-readiness.yaml)");
     expect(text).toContain("Repository changes: 1 file changed: modified README.md (+3/-1)");
     expect(text).toContain("Repository root: /repo/source-project");
+    expect(text).toContain("Repository diff preview:");
+    expect(text).toContain("1. M README.md");
+    expect(text).toContain("@@ -1,2 +1,4 @@");
+    expect(text).toContain("-old line");
+    expect(text).toContain("+new line");
     expect(text).toContain("Step details:");
     expect(text).toContain("1. collect [completed] agent=developer model=openrouter/owl-alpha");
     expect(text).toContain("task: Collect context");
@@ -119,6 +132,24 @@ describe("formatChatRunDetail", () => {
     expect(text).not.toContain("Task:");
     expect(text).not.toContain("Run options:");
     expect(text).not.toContain("Workflow locator:");
+  });
+
+  it("renders repository changed files without a diff preview", () => {
+    const text = formatChatRunDetail({
+      ...fullDetail,
+      runSummary: {
+        ...fullDetail.runSummary,
+        repositoryChanges: {
+          root: "/repo/source-project",
+          files: [{ status: "R", path: "old.md -> new.md" }],
+          summary: "1 file changed: renamed old.md -> new.md",
+        },
+      },
+    });
+
+    expect(text).toContain("Repository diff preview:");
+    expect(text).toContain("1. R old.md -> new.md");
+    expect(text).toContain("No diff preview recorded.");
   });
 
   it("bounds long step audit fields for terminal output", () => {
