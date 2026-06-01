@@ -198,6 +198,42 @@ describe("renderChatView", () => {
     expect(plain).toContain("updated 2026-05-24 10:11");
   });
 
+  it("summarizes repository changes in collapsed workflow messages", () => {
+    const changedSummary: WorkflowRunSummary = {
+      ...runSummary,
+      repositoryChanges: {
+        root: "/repo",
+        files: [
+          { status: "M", path: "README.md" },
+          { status: "??", path: "src/generated.js" },
+        ],
+        summary: "2 files changed: modified README.md, untracked src/generated.js",
+      },
+    };
+    const state = appendChatMessage(
+      createInitialChatState({
+        sessionId: "session-changes",
+        cwd: "/repo",
+        dryRun: false,
+      }),
+      {
+        ...createChatMessage(
+          "assistant",
+          "Workflow completed: 2/2 steps completed.",
+          () => new Date("2026-05-20T01:02:03Z")
+        ),
+        runSummary: changedSummary,
+      }
+    );
+
+    const output = renderedText(renderChatView(state, { columns: 120 }));
+    const plain = stripAnsi(output);
+
+    expect(plain).toContain("changed README.md, src/generated.js");
+    expect(plain).toContain("details /details exec-chat-1");
+    expect(plain).not.toContain("2 files changed: modified README.md");
+  });
+
   it("keeps session picker actions and retry metadata readable in narrow terminals", () => {
     const output = renderedText(
       renderChatView(
@@ -517,6 +553,11 @@ describe("renderChatView", () => {
       message: "Workflow completed: 1/1 steps completed.",
       completedStepCount: 1,
       totalStepCount: 1,
+      repositoryChanges: {
+        root: "/repo/source-project",
+        files: [{ status: "M", path: "review.md" }],
+        summary: "1 file changed: modified review.md",
+      },
       steps: [
         {
           name: "review",
@@ -581,6 +622,8 @@ describe("renderChatView", () => {
     expect(plain).toContain("project /repo");
     expect(plain).toContain("project /repo/source-project");
     expect(plain).toContain("path .obora/workflows/code-review.yaml");
+    expect(plain).toContain("changed 1 file changed: modified review.md");
+    expect(plain).toContain("change root /repo/source-project");
     expect(plain).toContain("viewing run exec-inspected");
     expect(plain).toContain("viewing run exec-inspected  ·  /details exec-inspected");
     expect(plain).toContain("/clear  /details 1  /retry 1  /details <runId>");

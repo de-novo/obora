@@ -19,6 +19,17 @@ export interface WorkflowRunStepSummary {
   readonly dependencies: ReadonlyArray<string>;
 }
 
+export interface WorkflowRunFileChange {
+  readonly status: string;
+  readonly path: string;
+}
+
+export interface WorkflowRunRepositoryChanges {
+  readonly root: string;
+  readonly files: ReadonlyArray<WorkflowRunFileChange>;
+  readonly summary: string;
+}
+
 export interface WorkflowRunSummary {
   readonly executionId: string;
   readonly workflowName: string;
@@ -30,6 +41,7 @@ export interface WorkflowRunSummary {
   readonly totalStepCount: number;
   readonly message: string;
   readonly error?: string;
+  readonly repositoryChanges?: WorkflowRunRepositoryChanges;
   readonly steps: ReadonlyArray<WorkflowRunStepSummary>;
 }
 

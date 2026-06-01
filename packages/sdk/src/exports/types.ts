@@ -49,6 +49,8 @@ export type {
   ParallelStepFailure,
 } from "../execution/parallel-scheduler.js";
 export type {
+  WorkflowRunFileChange,
+  WorkflowRunRepositoryChanges,
   WorkflowRunStepStatus,
   WorkflowRunStepSummary,
   WorkflowRunSummary,

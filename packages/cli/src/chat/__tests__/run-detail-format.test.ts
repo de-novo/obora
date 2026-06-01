@@ -39,6 +39,11 @@ const fullDetail: ChatRunDetail = {
     completedStepCount: 1,
     totalStepCount: 1,
     message: "Workflow completed: 1/1 steps completed.",
+    repositoryChanges: {
+      root: "/repo/source-project",
+      files: [{ status: "M", path: "README.md" }],
+      summary: "1 file changed: modified README.md",
+    },
     steps: [
       {
         name: "collect",
@@ -74,6 +79,8 @@ describe("formatChatRunDetail", () => {
     expect(text).toContain("Workflow target: release-readiness");
     expect(text).toContain("Retry: release-readiness");
     expect(text).toContain("Workflow locator: release-readiness (.obora/workflows/release-readiness.yaml)");
+    expect(text).toContain("Repository changes: 1 file changed: modified README.md");
+    expect(text).toContain("Repository root: /repo/source-project");
     expect(text).toContain("Step details:");
     expect(text).toContain("1. collect [completed] agent=developer model=openrouter/owl-alpha");
     expect(text).toContain("task: Collect context");

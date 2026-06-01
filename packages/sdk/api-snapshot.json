@@ -332,6 +332,8 @@
     "WorkflowResolveResult",
     "WorkflowResolveScope",
     "WorkflowResolveStatus",
+    "WorkflowRunFileChange",
+    "WorkflowRunRepositoryChanges",
     "WorkflowRunStepStatus",
     "WorkflowRunStepSummary",
     "WorkflowRunSummary",

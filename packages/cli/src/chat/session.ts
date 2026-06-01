@@ -47,6 +47,10 @@ import {
   toChatRunChoice,
   type ChatRunChoiceInput,
 } from "./run-choices.js";
+import {
+  captureRepositorySnapshot,
+  detectRepositoryChanges,
+} from "./repository-changes.js";
 import { formatCompactChatRunOptions } from "./run-options-format.js";
 import { isRunStatusFilter, runStatusFilterUsage } from "./run-status-filter.js";
 import {
@@ -1398,40 +1402,55 @@ const runChatTask = ({
     ...(runOptionsOverride ?? {}),
     input: runInput,
   };
+  const repositoryRoot = state.projectRoot ?? state.cwd;
+  const beforeRepositorySnapshot = commandOptions.dryRun
+    ? Promise.resolve(undefined)
+    : captureRepositorySnapshot(repositoryRoot);
 
-  return runWorkflowWithRetry(runWorkflow, workflowLocator.path, runOptions)
-    .then((execution): ChatTurnResult => {
-      const runSummary = execution
-        ? buildWorkflowRunSummary(execution)
-        : commandOptions.dryRun
-          ? createDryRunSummary({
-              sessionId: state.sessionId,
-              workflowName: workflowLocator.name,
-            })
-          : undefined;
-      return {
-        state: appendAssistant(
-          {
-            ...setChatStatus(runningState, "ready"),
-            lastRunCommand,
-            lastRunTask: message,
-            lastRunProjectRoot: state.projectRoot ?? state.cwd,
-            lastRunWorkflowLocator: workflowLocator,
-            lastRunOptions: hasRunMetadataOptions ? runMetadataOptions : undefined,
-            ...(runSummary ? { lastRunSummary: runSummary } : {}),
-          },
-          formatRunSummaryMessage(runSummary, commandOptions.dryRun),
-          runSummary,
-          {
-            workflowTarget,
-            runTask: message,
-            runWorkflowLocator: workflowLocator,
-            ...(hasRunMetadataOptions ? { runOptions: runMetadataOptions } : {}),
-          }
-        ),
-        exit: false,
-      };
-    })
+  return beforeRepositorySnapshot
+    .then((repositorySnapshot) =>
+      runWorkflowWithRetry(runWorkflow, workflowLocator.path, runOptions).then(
+        async (execution): Promise<ChatTurnResult> => {
+          const repositoryChanges = execution
+            ? await detectRepositoryChanges(repositoryRoot, repositorySnapshot)
+            : undefined;
+          const baseRunSummary = execution
+            ? buildWorkflowRunSummary(execution)
+            : commandOptions.dryRun
+              ? createDryRunSummary({
+                  sessionId: state.sessionId,
+                  workflowName: workflowLocator.name,
+                })
+              : undefined;
+          const runSummary =
+            baseRunSummary && repositoryChanges
+              ? { ...baseRunSummary, repositoryChanges }
+              : baseRunSummary;
+          return {
+            state: appendAssistant(
+              {
+                ...setChatStatus(runningState, "ready"),
+                lastRunCommand,
+                lastRunTask: message,
+                lastRunProjectRoot: state.projectRoot ?? state.cwd,
+                lastRunWorkflowLocator: workflowLocator,
+                lastRunOptions: hasRunMetadataOptions ? runMetadataOptions : undefined,
+                ...(runSummary ? { lastRunSummary: runSummary } : {}),
+              },
+              formatRunSummaryMessage(runSummary, commandOptions.dryRun),
+              runSummary,
+              {
+                workflowTarget,
+                runTask: message,
+                runWorkflowLocator: workflowLocator,
+                ...(hasRunMetadataOptions ? { runOptions: runMetadataOptions } : {}),
+              }
+            ),
+            exit: false,
+          };
+        }
+      )
+    )
     .catch((error: unknown): ChatTurnResult => {
       const failureMessage = errorMessage(error);
       return {

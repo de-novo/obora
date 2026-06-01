@@ -77,6 +77,12 @@ export const formatChatRunDetail = (detail: ChatRunDetail): string =>
         ]
       : []),
     `Summary: ${detail.runSummary.message}`,
+    ...(detail.runSummary.repositoryChanges
+      ? [
+          `Repository changes: ${detail.runSummary.repositoryChanges.summary}`,
+          `Repository root: ${detail.runSummary.repositoryChanges.root}`,
+        ]
+      : []),
     ...(detail.runSummary.error ? [`Error: ${detail.runSummary.error}`] : []),
     "",
     "Step details:",

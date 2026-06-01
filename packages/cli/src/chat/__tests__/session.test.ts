@@ -1,15 +1,19 @@
+import { execFile } from "node:child_process";
 import { buildWorkflowRunSummary } from "@obora/sdk";
 import type { RuntimeExecution, WorkflowLocator } from "@obora/sdk";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
+import { promisify } from "node:util";
 import { describe, expect, it, vi } from "vitest";
 
 import { createInitialChatState } from "../state.js";
 import { handleChatInput, runChatSession } from "../session.js";
 import { saveChatSessionState } from "../store.js";
 import { chatRunChoicesFromSummaries } from "../run-choices.js";
+
+const execFileAsync = promisify(execFile);
 
 const locator: WorkflowLocator = {
   id: "project:abc",
@@ -158,6 +162,50 @@ describe("chat session", () => {
     expect(ran.state.messages.at(-1)?.runSummary?.executionId).toBe(
       ran.state.lastRunSummary?.executionId
     );
+  });
+
+  it("attaches repository file changes to live chat run summaries", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-chat-repo-changes-"));
+    await execFileAsync("git", ["init"], { cwd: dir });
+    const generatedPath = join(dir, "src", "generated.js");
+    const localLocator: WorkflowLocator = {
+      ...locator,
+      path: join(dir, ".obora", "workflows", "release-readiness.yaml"),
+      displayPath: ".obora/workflows/release-readiness.yaml",
+      projectRoot: dir,
+    };
+    const localRunWorkflow = vi.fn(async () => {
+      await mkdir(join(dir, "src"), { recursive: true });
+      await writeFile(generatedPath, "console.log('generated');\n", "utf8");
+      return executionResult;
+    });
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-repo-changes",
+        cwd: dir,
+        projectRoot: dir,
+        dryRun: false,
+      }),
+      workflowLocator: localLocator,
+      status: "ready" as const,
+    };
+
+    const result = await handleChatInput({
+      input: "create a generated cli file",
+      state,
+      resolveWorkflow,
+      runWorkflow: localRunWorkflow,
+      commandOptions: {},
+    });
+
+    expect(result.state.lastRunSummary?.repositoryChanges).toMatchObject({
+      root: await realpath(dir),
+      files: [{ status: "??", path: "src/generated.js" }],
+      summary: "1 file changed: untracked src/generated.js",
+    });
+    expect(result.state.messages.at(-1)?.runSummary?.repositoryChanges?.files).toEqual([
+      { status: "??", path: "src/generated.js" },
+    ]);
   });
 
   it("opens help as the active panel and clears stale panel context", async () => {

@@ -164,6 +164,9 @@ const runSummaryTools = (summary: WorkflowRunSummary): ReadonlyArray<string> =>
 const runSummaryArtifacts = (summary: WorkflowRunSummary): ReadonlyArray<string> =>
   uniqueStepValues(summary, (step) => step.artifacts);
 
+const runSummaryChangedFiles = (summary: WorkflowRunSummary): ReadonlyArray<string> =>
+  summary.repositoryChanges?.files.map((file) => file.path) ?? [];
+
 const runSummaryAuditLine = (summary: WorkflowRunSummary): string | undefined => {
   const models = runSummaryModels(summary);
   const tools = runSummaryTools(summary);
@@ -178,6 +181,13 @@ const runSummaryArtifactLine = (summary: WorkflowRunSummary): string | undefined
   const artifacts = runSummaryArtifacts(summary);
   return artifacts.length > 0
     ? `${muted(">")} ${muted("files")} ${compactValueList(artifacts, 4)}`
+    : undefined;
+};
+
+const runSummaryChangeLine = (summary: WorkflowRunSummary): string | undefined => {
+  const changedFiles = runSummaryChangedFiles(summary);
+  return changedFiles.length > 0
+    ? `${muted(">")} ${muted("changed")} ${compactValueList(changedFiles, 4)}`
     : undefined;
 };
 
@@ -206,6 +216,7 @@ const runSummaryTeaser = (summary: WorkflowRunSummary): ReadonlyArray<string> =>
   `${muted(">")} ${formatStepNames(summary) || "no steps recorded"}`,
   runSummaryAuditLine(summary),
   runSummaryArtifactLine(summary),
+  runSummaryChangeLine(summary),
   `${muted(">")} details /details ${summary.executionId}`,
 ].filter((line): line is string => Boolean(line));
 
@@ -356,6 +367,12 @@ const runDetailHeaderLines = (
     ...(options ? [`${muted("options")} ${options}`] : []),
     ...(workflow ? [`${muted("path")} ${compactPath(workflow.displayPath, 72)}`] : []),
     `${muted("summary")} ${summary.message}`,
+    ...(summary.repositoryChanges
+      ? [
+          `${muted("changed")} ${summary.repositoryChanges.summary}`,
+          `${muted("change root")} ${compactPath(summary.repositoryChanges.root, 72)}`,
+        ]
+      : []),
     `${muted("open")} /details ${summary.executionId}`,
     ...(summary.error ? [`${muted("error")} ${red(summary.error)}`] : []),
   ];
