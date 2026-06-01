@@ -266,6 +266,24 @@ const verifyCliChatOnceSmoke = async (tmpDir) => {
     'chat day-grouped session list text must preserve workflow and task metadata',
   );
 
+  const projectGroupedSessionsText = await runCliText({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --list-sessions project grouped text',
+    args: ['chat', '--list-sessions', '--group-sessions', 'project'],
+  });
+  assert(
+    projectGroupedSessionsText.includes('group') &&
+      projectGroupedSessionsText.includes(projectDir) &&
+      projectGroupedSessionsText.includes(sessionId),
+    'chat project-grouped session list text must include the project group and saved session id',
+  );
+  assert(
+    projectGroupedSessionsText.includes('quickstart-judge') &&
+      projectGroupedSessionsText.includes(chatTask),
+    'chat project-grouped session list text must preserve workflow and task metadata',
+  );
+
   const currentProjectSessionsText = await runCliText({
     cwd: projectDir,
     env,
