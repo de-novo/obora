@@ -85,7 +85,7 @@ describe("formatChatSessionDetail", () => {
     expect(detail).toContain("Last result: completed 1/1");
     expect(detail).toContain("Details: /details exec-session");
     expect(detail).toContain("prepare release check");
-    expect(detail).toContain(`${"x".repeat(95)}...`);
+    expect(detail).toContain(`${"x".repeat(93)}...`);
     expect(detail).not.toContain("oldest hidden");
     expect(detail).not.toContain(longMessage);
   });

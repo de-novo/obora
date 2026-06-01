@@ -2,7 +2,7 @@ import type { ChatMessage, ChatSessionState } from "./types.js";
 import { formatCompactChatRunOptions } from "./run-options-format.js";
 
 const preview = (value: string, maxLength = 96): string =>
-  value.length > maxLength ? `${value.slice(0, maxLength - 1)}...` : value;
+  value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
 
 const formatTags = (tags: ReadonlyArray<string> | undefined): string =>
   tags && tags.length > 0 ? tags.join(", ") : "none";
