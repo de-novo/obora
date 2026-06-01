@@ -141,6 +141,46 @@ const formatStepNames = (summary: WorkflowRunSummary): string =>
 const stepValues = (values: ReadonlyArray<string> | undefined): ReadonlyArray<string> =>
   values ?? [];
 
+const uniqueStepValues = (
+  summary: WorkflowRunSummary,
+  select: (step: WorkflowRunStepSummary) => ReadonlyArray<string> | undefined
+): ReadonlyArray<string> =>
+  Array.from(new Set(summary.steps.flatMap((step) => stepValues(select(step)))));
+
+const compactValueList = (
+  items: ReadonlyArray<string>,
+  maxItems = 3
+): string =>
+  items.length <= maxItems
+    ? items.join(", ")
+    : `${items.slice(0, maxItems).join(", ")} +${items.length - maxItems}`;
+
+const runSummaryModels = (summary: WorkflowRunSummary): ReadonlyArray<string> =>
+  uniqueStepValues(summary, (step) => (step.model ? [step.model] : []));
+
+const runSummaryTools = (summary: WorkflowRunSummary): ReadonlyArray<string> =>
+  uniqueStepValues(summary, (step) => step.toolsUsed);
+
+const runSummaryArtifacts = (summary: WorkflowRunSummary): ReadonlyArray<string> =>
+  uniqueStepValues(summary, (step) => step.artifacts);
+
+const runSummaryAuditLine = (summary: WorkflowRunSummary): string | undefined => {
+  const models = runSummaryModels(summary);
+  const tools = runSummaryTools(summary);
+  const modelText = models.length > 0 ? `${muted("models")} ${compactValueList(models)}` : "";
+  const toolText = tools.length > 0 ? `${muted("tools")} ${compactValueList(tools)}` : "";
+  return models.length > 0 || tools.length > 0
+    ? `${muted(">")} ${modelText}${models.length > 0 && tools.length > 0 ? " · " : ""}${toolText}`
+    : undefined;
+};
+
+const runSummaryArtifactLine = (summary: WorkflowRunSummary): string | undefined => {
+  const artifacts = runSummaryArtifacts(summary);
+  return artifacts.length > 0
+    ? `${muted(">")} ${muted("files")} ${compactValueList(artifacts, 4)}`
+    : undefined;
+};
+
 const formatStepToolLine = (step: WorkflowRunStepSummary): string | undefined =>
   stepValues(step.toolsUsed).length > 0
     ? `${muted("tools")} ${stepValues(step.toolsUsed).join(", ")}`
@@ -164,8 +204,10 @@ const formatStepDependencyLine = (step: WorkflowRunStepSummary): string | undefi
 const runSummaryTeaser = (summary: WorkflowRunSummary): ReadonlyArray<string> => [
   `${muted(">")} ${summary.completedStepCount}/${summary.totalStepCount} steps · ${formatRunDuration(summary)}`,
   `${muted(">")} ${formatStepNames(summary) || "no steps recorded"}`,
+  runSummaryAuditLine(summary),
+  runSummaryArtifactLine(summary),
   `${muted(">")} details /details ${summary.executionId}`,
-];
+].filter((line): line is string => Boolean(line));
 
 const renderHeader = (state: ChatSessionState, width: number): ReadonlyArray<string> => [
   dim(compactPath(state.cwd, width)),

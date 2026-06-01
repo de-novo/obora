@@ -125,8 +125,8 @@ describe("renderChatView", () => {
     expect(plain).toContain("#1 release-readiness");
     expect(plain).toContain("#2 code-review");
     expect(plain).toContain("collect, handoff");
-    expect(plain).not.toContain("file_read, file_write");
-    expect(plain).not.toContain("release-notes.md");
+    expect(plain).toContain("tools file_read, file_write");
+    expect(plain).toContain("files release-notes.md");
     expect(plain).not.toContain("why Use release notes");
     expect(plain).not.toContain("rationale The notes are the requested artifact.");
     expect(plain).not.toContain("depends collect");
