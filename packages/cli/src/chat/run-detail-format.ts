@@ -5,15 +5,30 @@ import type { ChatRunDetail } from "./store.js";
 
 const values = (items: ReadonlyArray<string> | undefined): ReadonlyArray<string> => items ?? [];
 
+const preview = (value: string, maxLength = 160): string =>
+  value.length <= maxLength ? value : `${value.slice(0, maxLength - 3)}...`;
+
+const previewValues = (items: ReadonlyArray<string> | undefined): ReadonlyArray<string> =>
+  values(items).map((item) => preview(item));
+
+const joinedPreviewValues = (
+  items: ReadonlyArray<string> | undefined,
+  separator: string
+): string | undefined =>
+  previewValues(items).length > 0 ? previewValues(items).join(separator) : undefined;
+
+const labeledLine = (label: string, value: string | undefined): string | undefined =>
+  value ? `    ${label}: ${value}` : undefined;
+
 const valueLine = (
   label: string,
   items: ReadonlyArray<string> | undefined,
   separator = ", "
 ): string | undefined =>
-  values(items).length > 0 ? `    ${label}: ${values(items).join(separator)}` : undefined;
+  labeledLine(label, joinedPreviewValues(items, separator));
 
 const optionalLine = (label: string, value: string | undefined): string | undefined =>
-  value ? `    ${label}: ${value}` : undefined;
+  labeledLine(label, value ? preview(value) : undefined);
 
 const stepTitle = (step: WorkflowRunStepSummary, index: number): string =>
   `  ${index + 1}. ${step.name} [${step.status}]${step.agent ? ` agent=${step.agent}` : ""}${step.model ? ` model=${step.model}` : ""}`;
@@ -22,7 +37,7 @@ const formatStep = (step: WorkflowRunStepSummary, index: number): ReadonlyArray<
   [
     stepTitle(step, index),
     optionalLine("task", step.task),
-    `    output: ${step.outputPreview}`,
+    `    output: ${preview(step.outputPreview)}`,
     `    format: ${step.outputFormat}`,
     optionalLine("method", step.methodology),
     optionalLine("rationale", step.rationale),

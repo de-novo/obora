@@ -113,4 +113,35 @@ describe("formatChatRunDetail", () => {
     expect(text).not.toContain("Run options:");
     expect(text).not.toContain("Workflow locator:");
   });
+
+  it("bounds long step audit fields for terminal output", () => {
+    const longText = "x".repeat(220);
+    const text = formatChatRunDetail({
+      ...fullDetail,
+      runSummary: {
+        ...fullDetail.runSummary,
+        steps: [
+          {
+            ...fullDetail.runSummary.steps[0],
+            task: longText,
+            outputPreview: longText,
+            methodology: longText,
+            rationale: longText,
+            decisions: [longText],
+            issues: [longText],
+          },
+        ],
+      },
+    });
+
+    const bounded = `${"x".repeat(157)}...`;
+
+    expect(text).toContain(`task: ${bounded}`);
+    expect(text).toContain(`output: ${bounded}`);
+    expect(text).toContain(`method: ${bounded}`);
+    expect(text).toContain(`rationale: ${bounded}`);
+    expect(text).toContain(`decisions: ${bounded}`);
+    expect(text).toContain(`issues: ${bounded}`);
+    expect(text).not.toContain(longText);
+  });
 });
