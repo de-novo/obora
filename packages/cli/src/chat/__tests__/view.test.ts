@@ -419,7 +419,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("open /details exec-chat-1");
     expect(plain).toContain("viewing run exec-chat-1");
     expect(plain).toContain("open run completed 2/2 exec-chat-1");
-    expect(plain).toContain("/clear  /details 1  /retry 1  /details <runId>");
+    expect(plain).toContain("/clear  /diff 1  /diff next  /retry 1");
     expect(plain).toContain("/runs  /session  /project  /help");
   });
 
@@ -644,19 +644,93 @@ describe("renderChatView", () => {
     expect(plain).toContain("path .obora/workflows/code-review.yaml");
     expect(plain).toContain("changed 1 file changed: modified review.md (+5/-2)");
     expect(plain).toContain("change root /repo/source-project");
+    expect(plain).toContain("diff focus /diff 1 /diff next /diff prev");
     expect(plain).toContain("repository diff preview /repo/source-project");
-    expect(plain).toContain("#1 review.md M");
+    expect(plain).toContain("● #1 review.md M");
+    expect(plain).toContain("selected diff #1 review.md");
     expect(plain).toContain("diff @@ -1,2 +1,5 @@");
     expect(plain).toContain("diff -old review");
     expect(plain).toContain("diff +new review");
     expect(plain).toContain("viewing run exec-inspected");
     expect(plain).toContain("viewing run exec-inspected  ·  /details exec-inspected");
-    expect(plain).toContain("/clear  /details 1  /retry 1  /details <runId>");
+    expect(plain).toContain("/clear  /diff 1  /diff next  /retry 1");
     expect(plain).toContain("#1 review completed");
     expect(plain).toContain("format text");
     expect(plain).toContain("method Direct repository inspection");
     expect(plain).toContain("artifacts review.md");
     expect(plain).not.toContain("id exec-chat-1");
+  });
+
+  it("focuses the selected changed file in run details", () => {
+    const inspectedSummary: WorkflowRunSummary = {
+      ...runSummary,
+      repositoryChanges: {
+        root: "/repo/source-project",
+        files: [
+          {
+            status: "M",
+            path: "README.md",
+            diffPreview: ["-old readme", "+new readme"],
+          },
+          {
+            status: "??",
+            path: "src/generated.js",
+            diffPreview: ["+console.log('generated');"],
+          },
+        ],
+        summary: "2 files changed: modified README.md, untracked src/generated.js",
+      },
+    };
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-a",
+            cwd: "/repo",
+            dryRun: false,
+          }),
+          inspectedRunSummary: inspectedSummary,
+          selectedRunFileChangeIndex: 1,
+        },
+        { columns: 120 }
+      )
+    );
+    const plain = stripAnsi(output);
+
+    expect(plain).toContain("○ #1 README.md M");
+    expect(plain).toContain("● #2 src/generated.js ??");
+    expect(plain).toContain("selected diff #2 src/generated.js");
+    expect(plain).toContain("diff +console.log('generated');");
+    expect(plain).not.toContain("diff -old readme");
+  });
+
+  it("renders focused changed files without a recorded diff preview", () => {
+    const inspectedSummary: WorkflowRunSummary = {
+      ...runSummary,
+      repositoryChanges: {
+        root: "/repo/source-project",
+        files: [{ status: "R", path: "old.md -> new.md" }],
+        summary: "1 file changed: renamed old.md -> new.md",
+      },
+    };
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-a",
+            cwd: "/repo",
+            dryRun: false,
+          }),
+          inspectedRunSummary: inspectedSummary,
+        },
+        { columns: 120 }
+      )
+    );
+    const plain = stripAnsi(output);
+
+    expect(plain).toContain("● #1 old.md -> new.md R");
+    expect(plain).toContain("selected diff #1 old.md -> new.md");
+    expect(plain).toContain("diff no preview recorded");
   });
 
   it("falls back to a stacked layout for narrow terminals", () => {

@@ -61,6 +61,7 @@ export interface ChatSessionState {
   readonly lastRunOptions?: ChatRunOptions;
   readonly lastRunSummary?: WorkflowRunSummary;
   readonly inspectedRunSummary?: WorkflowRunSummary;
+  readonly selectedRunFileChangeIndex?: number;
   readonly runChoices?: ReadonlyArray<ChatRunChoice>;
   readonly selectedRunChoiceIndex?: number;
   readonly showHelpPanel?: boolean;

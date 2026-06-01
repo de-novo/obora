@@ -1206,6 +1206,122 @@ describe("chat session", () => {
     });
   });
 
+  it("selects changed files inside open run details", async () => {
+    const runSummary = {
+      ...buildWorkflowRunSummary(executionResult),
+      repositoryChanges: {
+        root: "/repo",
+        files: [
+          {
+            status: "M",
+            path: "README.md",
+            diffPreview: ["-old readme", "+new readme"],
+          },
+          {
+            status: "??",
+            path: "src/generated.js",
+            diffPreview: ["+console.log('generated');"],
+          },
+        ],
+        summary: "2 files changed: modified README.md, untracked src/generated.js",
+      },
+    };
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-diff",
+        cwd: "/repo",
+        dryRun: false,
+      }),
+      inspectedRunSummary: runSummary,
+      selectedRunFileChangeIndex: 0,
+    };
+
+    const selected = await handleChatInput({
+      input: "/diff 2",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: {},
+    });
+    const moved = await handleChatInput({
+      input: "/diff prev",
+      state: selected.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: {},
+    });
+    const missing = await handleChatInput({
+      input: "/diff 3",
+      state: moved.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: {},
+    });
+
+    expect(selected.state.selectedRunFileChangeIndex).toBe(1);
+    expect(selected.state.messages.at(-1)?.content).toBe(
+      "Selected changed file 2: src/generated.js."
+    );
+    expect(moved.state.selectedRunFileChangeIndex).toBe(0);
+    expect(moved.state.messages.at(-1)?.content).toBe("Selected changed file 1: README.md.");
+    expect(missing.state.selectedRunFileChangeIndex).toBe(0);
+    expect(missing.state.messages.at(-1)?.content).toBe(
+      "Changed file not found. Use /diff 1 or /diff next."
+    );
+  });
+
+  it("reports diff selection prerequisites and empty change sets", async () => {
+    const baseState = createInitialChatState({
+      sessionId: "session-diff-empty",
+      cwd: "/repo",
+      dryRun: false,
+    });
+    const closed = await handleChatInput({
+      input: "/diff 1",
+      state: baseState,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: {},
+    });
+    const empty = await handleChatInput({
+      input: "/diff next",
+      state: {
+        ...baseState,
+        inspectedRunSummary: buildWorkflowRunSummary(executionResult),
+      },
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: {},
+    });
+    const invalid = await handleChatInput({
+      input: "/diff file",
+      state: {
+        ...baseState,
+        inspectedRunSummary: {
+          ...buildWorkflowRunSummary(executionResult),
+          repositoryChanges: {
+            root: "/repo",
+            files: [{ status: "M", path: "README.md" }],
+            summary: "1 file changed: modified README.md",
+          },
+        },
+      },
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: {},
+    });
+
+    expect(closed.state.messages.at(-1)?.content).toBe(
+      "Open run details before selecting a diff. Use /details <executionId> first."
+    );
+    expect(empty.state.messages.at(-1)?.content).toBe(
+      "No changed files are available in the open run details."
+    );
+    expect(invalid.state.messages.at(-1)?.content).toBe(
+      "Changed file not found. Use /diff 1 or /diff next."
+    );
+  });
+
   it("opens the latest run details with a short details command", async () => {
     const runWorkflowWithResult = vi.fn(async () => executionResult);
     const selected = {

@@ -376,6 +376,7 @@ const runDetailHeaderLines = (
       ? [
           `${muted("changed")} ${summary.repositoryChanges.summary}`,
           `${muted("change root")} ${compactPath(summary.repositoryChanges.root, 72)}`,
+          `${muted("diff focus")} /diff 1   /diff next   /diff prev`,
         ]
       : []),
     `${muted("open")} /details ${summary.executionId}`,
@@ -426,24 +427,52 @@ const runDetailStepLines = (
       : undefined,
   ].filter((line): line is string => Boolean(line));
 
-const runDetailFileChangeLines = (
+const runDetailFileChangeListLine = (
+  file: WorkflowRunFileChange,
+  index: number,
+  selected: boolean
+): string =>
+  [
+    selected ? green("●") : muted("○"),
+    cyan(`#${index + 1}`),
+    bold(file.path),
+    muted(file.status),
+  ].join(" ");
+
+const runDetailFileChangePreviewLines = (
   file: WorkflowRunFileChange,
   index: number
 ): ReadonlyArray<string> => [
-  `${cyan(`#${index + 1}`)} ${bold(file.path)} ${muted(file.status)}`,
+  `${muted("selected diff")} #${index + 1} ${file.path}`,
   ...(file.diffPreview && file.diffPreview.length > 0
     ? file.diffPreview.map((line) => `${muted("diff")} ${line}`)
     : [`${muted("diff")} no preview recorded`]),
 ];
 
-const runDetailRepositoryLines = (summary: WorkflowRunSummary): ReadonlyArray<string> =>
-  summary.repositoryChanges
+const selectedRunFileChangeIndex = (
+  state: ChatSessionState,
+  files: ReadonlyArray<WorkflowRunFileChange>
+): number => clamp(state.selectedRunFileChangeIndex ?? 0, 0, Math.max(files.length - 1, 0));
+
+const runDetailRepositoryLines = (
+  state: ChatSessionState,
+  summary: WorkflowRunSummary
+): ReadonlyArray<string> => {
+  const changes = summary.repositoryChanges;
+  const files = changes?.files ?? [];
+  const selectedIndex = selectedRunFileChangeIndex(state, files);
+  const selectedFile = files[selectedIndex];
+  return changes && selectedFile
     ? [
         "",
-        `${muted("repository diff preview")} ${compactPath(summary.repositoryChanges.root, 72)}`,
-        ...summary.repositoryChanges.files.flatMap(runDetailFileChangeLines),
+        `${muted("repository diff preview")} ${compactPath(changes.root, 72)}`,
+        ...files.map((file, index) =>
+          runDetailFileChangeListLine(file, index, index === selectedIndex)
+        ),
+        ...runDetailFileChangePreviewLines(selectedFile, selectedIndex),
       ]
     : [];
+};
 
 const renderRunInspector = (
   state: ChatSessionState,
@@ -458,7 +487,7 @@ const renderRunInspector = (
           ...runDetailAttentionLines(summary),
           "",
           ...summary.steps.flatMap(runDetailStepLines),
-          ...runDetailRepositoryLines(summary),
+          ...runDetailRepositoryLines(state, summary),
         ],
         width
       )

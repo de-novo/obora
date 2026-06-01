@@ -120,7 +120,7 @@ describe("chat command metadata", () => {
       })
     ).toEqual([
       "Enter open  Tab next  Esc close  Ctrl+R retry",
-      "/clear  /details 1  /retry 1  /details <runId>",
+      "/clear  /diff 1  /diff next  /retry 1",
       "/runs  /session  /project  /help",
     ]);
     expect(

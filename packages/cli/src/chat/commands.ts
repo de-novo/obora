@@ -150,6 +150,11 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
     group: "details",
   },
   {
+    command: "/diff 1, /diff next, or /diff prev",
+    description: "focuses a changed file inside open run details",
+    group: "details",
+  },
+  {
     command: "/clear or /details clear",
     description: "closes the current panel",
     group: "details",
@@ -205,10 +210,10 @@ export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<st
     return state.runChoices && state.runChoices.length > 0
       ? [
           "Enter open  Tab next  Esc close  Ctrl+R retry",
-          "/clear  /details 1  /retry 1  /details <runId>",
+          "/clear  /diff 1  /diff next  /retry 1",
           "/runs  /session  /project  /help",
         ]
-      : ["Esc close  Ctrl+R retry", "/clear  /runs  /details <runId>", "/session  /project  /help"];
+      : ["Esc close  Ctrl+R retry", "/clear  /diff 1  /runs", "/session  /project  /help"];
   }
   if (state.runChoices && state.runChoices.length > 0) {
     return [

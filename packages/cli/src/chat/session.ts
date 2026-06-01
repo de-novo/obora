@@ -7,6 +7,7 @@ import { buildWorkflowRunSummary } from "@obora/sdk";
 import type {
   WorkflowLocator,
   WorkflowResolveScope,
+  WorkflowRunFileChange,
   WorkflowRunSummary,
 } from "@obora/sdk";
 
@@ -128,6 +129,9 @@ const workflowTargetFromCommand = (input: string): string | undefined =>
 
 const detailsTargetFromCommand = (input: string): string | undefined =>
   input.startsWith("/details ") ? input.slice("/details ".length).trim() : undefined;
+
+const diffTargetFromCommand = (input: string): string | undefined =>
+  input.startsWith("/diff ") ? input.slice("/diff ".length).trim() : undefined;
 
 const retryTargetFromCommand = (input: string): string | undefined =>
   input.startsWith("/retry ") ? input.slice("/retry ".length).trim() : undefined;
@@ -537,6 +541,69 @@ const moveRunChoiceSelection = (
         exit: false,
       };
 
+const inspectedRunFileChanges = (
+  state: ChatSessionState
+): ReadonlyArray<WorkflowRunFileChange> =>
+  state.inspectedRunSummary?.repositoryChanges?.files ?? [];
+
+const fileChangeIndexFromTarget = (target: string): number | undefined =>
+  /^\d+$/u.test(target) ? Number.parseInt(target, 10) - 1 : undefined;
+
+const moveRunFileChangeSelection = (
+  state: ChatSessionState,
+  direction: "next" | "prev"
+): ChatTurnResult => {
+  const files = inspectedRunFileChanges(state);
+  const selectedIndex =
+    files.length > 0 ? movedChoiceIndex(files, state.selectedRunFileChangeIndex, direction) : undefined;
+  return selectedIndex !== undefined
+    ? {
+        state: appendAssistant(
+          {
+            ...state,
+            selectedRunFileChangeIndex: selectedIndex,
+          },
+          `Selected changed file ${selectedIndex + 1}: ${files[selectedIndex]?.path ?? "unknown"}.`
+        ),
+        exit: false,
+      }
+    : {
+        state: appendAssistant(state, "No changed files are available in the open run details."),
+        exit: false,
+      };
+};
+
+const selectRunFileChange = (
+  state: ChatSessionState,
+  target: string
+): ChatTurnResult => {
+  const files = inspectedRunFileChanges(state);
+  const action = target === "next" || target === "prev" ? target : undefined;
+  const index = action ? undefined : fileChangeIndexFromTarget(target);
+  return action
+    ? moveRunFileChangeSelection(state, action)
+    : index !== undefined && files[index]
+      ? {
+          state: appendAssistant(
+            {
+              ...state,
+              selectedRunFileChangeIndex: index,
+            },
+            `Selected changed file ${index + 1}: ${files[index].path}.`
+          ),
+          exit: false,
+        }
+      : {
+          state: appendAssistant(
+            state,
+            files.length > 0
+              ? "Changed file not found. Use /diff 1 or /diff next."
+              : "No changed files are available in the open run details."
+          ),
+          exit: false,
+        };
+};
+
 const runChoiceEntryForTarget = (
   state: ChatSessionState,
   target: string
@@ -584,6 +651,7 @@ const clearPanels = (state: ChatSessionState): ChatSessionState =>
     ? {
         ...state,
         inspectedRunSummary: undefined,
+        selectedRunFileChangeIndex: undefined,
         sessionChoices: undefined,
         selectedSessionChoiceIndex: undefined,
         workflowChoices: undefined,
@@ -593,6 +661,7 @@ const clearPanels = (state: ChatSessionState): ChatSessionState =>
     : {
         ...state,
         inspectedRunSummary: undefined,
+        selectedRunFileChangeIndex: undefined,
         runChoices: undefined,
         selectedRunChoiceIndex: undefined,
         sessionChoices: undefined,
@@ -605,6 +674,7 @@ const clearPanels = (state: ChatSessionState): ChatSessionState =>
 const withoutPanels = (state: ChatSessionState): ChatSessionState => ({
   ...state,
   inspectedRunSummary: undefined,
+  selectedRunFileChangeIndex: undefined,
   runChoices: undefined,
   selectedRunChoiceIndex: undefined,
   sessionChoices: undefined,
@@ -726,6 +796,7 @@ const clearPanelMessage = (state: ChatSessionState): string =>
 const withHelpPanel = (state: ChatSessionState): ChatSessionState => ({
   ...state,
   inspectedRunSummary: undefined,
+  selectedRunFileChangeIndex: undefined,
   runChoices: undefined,
   selectedRunChoiceIndex: undefined,
   sessionChoices: undefined,
@@ -839,6 +910,7 @@ const withRunChoices = (
 ): ChatSessionState => ({
   ...state,
   inspectedRunSummary: undefined,
+  selectedRunFileChangeIndex: undefined,
   runChoices: runChoices.map((choice) => toChatRunChoice(choice, state.sessionId)),
   selectedRunChoiceIndex: runChoices.length > 0 ? 0 : undefined,
   sessionChoices: undefined,
@@ -858,6 +930,7 @@ const withSessionTags = (
   ...state,
   tags,
   inspectedRunSummary: undefined,
+  selectedRunFileChangeIndex: undefined,
   runChoices: undefined,
   selectedRunChoiceIndex: undefined,
   sessionChoices: undefined,
@@ -873,6 +946,7 @@ const withSessionChoices = (
 ): ChatSessionState => ({
   ...state,
   inspectedRunSummary: undefined,
+  selectedRunFileChangeIndex: undefined,
   sessionChoices,
   selectedSessionChoiceIndex: sessionChoices.length > 0 ? 0 : undefined,
   runChoices: undefined,
@@ -889,6 +963,10 @@ const withInspectedRunSummary = (
 ): ChatSessionState => ({
   ...state,
   inspectedRunSummary: summary,
+  selectedRunFileChangeIndex:
+    summary.repositoryChanges?.files && summary.repositoryChanges.files.length > 0
+      ? clampChoiceIndex(summary.repositoryChanges.files, state.selectedRunFileChangeIndex)
+      : undefined,
   runChoices,
   selectedRunChoiceIndex:
     runChoices && runChoices.length > 0
@@ -1119,6 +1197,7 @@ const withProjectRoot = (state: ChatSessionState, projectRoot: string): ChatSess
   workflowLocator: undefined,
   workflowChoices: [],
   inspectedRunSummary: undefined,
+  selectedRunFileChangeIndex: undefined,
   runChoices: undefined,
   selectedRunChoiceIndex: undefined,
   sessionChoices: undefined,
@@ -1295,6 +1374,7 @@ const withWorkflowChoices = (
 ): ChatSessionState => ({
   ...state,
   inspectedRunSummary: undefined,
+  selectedRunFileChangeIndex: undefined,
   workflowChoices,
   selectedWorkflowChoiceIndex: workflowChoices.length > 0 ? 0 : undefined,
   runChoices: undefined,
@@ -1315,6 +1395,7 @@ const withResolvedWorkflow = (
   workflowChoices: undefined,
   selectedWorkflowChoiceIndex: undefined,
   inspectedRunSummary: undefined,
+  selectedRunFileChangeIndex: undefined,
   runChoices: undefined,
   selectedRunChoiceIndex: undefined,
   sessionChoices: undefined,
@@ -2092,6 +2173,19 @@ export const handleChatInput = async ({
       state: appendAssistant(clearPanels(state), clearPanelMessage(state)),
       exit: false,
     };
+  }
+
+  const diffTarget = diffTargetFromCommand(trimmed);
+  if (diffTarget) {
+    return state.inspectedRunSummary
+      ? selectRunFileChange(state, diffTarget)
+      : {
+          state: appendAssistant(
+            state,
+            "Open run details before selecting a diff. Use /details <executionId> first."
+          ),
+          exit: false,
+        };
   }
 
   if (trimmed === "/details") {
