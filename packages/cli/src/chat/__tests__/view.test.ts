@@ -204,10 +204,10 @@ describe("renderChatView", () => {
       repositoryChanges: {
         root: "/repo",
         files: [
-          { status: "M", path: "README.md" },
-          { status: "??", path: "src/generated.js" },
+          { status: "M", path: "README.md", additions: 3, deletions: 1 },
+          { status: "??", path: "src/generated.js", additions: 1 },
         ],
-        summary: "2 files changed: modified README.md, untracked src/generated.js",
+        summary: "2 files changed: modified README.md (+3/-1), untracked src/generated.js (+1/-0)",
       },
     };
     const state = appendChatMessage(
@@ -231,7 +231,7 @@ describe("renderChatView", () => {
 
     expect(plain).toContain("changed README.md, src/generated.js");
     expect(plain).toContain("details /details exec-chat-1");
-    expect(plain).not.toContain("2 files changed: modified README.md");
+    expect(plain).not.toContain("2 files changed: modified README.md (+3/-1)");
   });
 
   it("keeps session picker actions and retry metadata readable in narrow terminals", () => {
@@ -555,8 +555,8 @@ describe("renderChatView", () => {
       totalStepCount: 1,
       repositoryChanges: {
         root: "/repo/source-project",
-        files: [{ status: "M", path: "review.md" }],
-        summary: "1 file changed: modified review.md",
+        files: [{ status: "M", path: "review.md", additions: 5, deletions: 2 }],
+        summary: "1 file changed: modified review.md (+5/-2)",
       },
       steps: [
         {
@@ -622,7 +622,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("project /repo");
     expect(plain).toContain("project /repo/source-project");
     expect(plain).toContain("path .obora/workflows/code-review.yaml");
-    expect(plain).toContain("changed 1 file changed: modified review.md");
+    expect(plain).toContain("changed 1 file changed: modified review.md (+5/-2)");
     expect(plain).toContain("change root /repo/source-project");
     expect(plain).toContain("viewing run exec-inspected");
     expect(plain).toContain("viewing run exec-inspected  ·  /details exec-inspected");

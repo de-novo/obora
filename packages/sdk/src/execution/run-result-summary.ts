@@ -22,6 +22,8 @@ export interface WorkflowRunStepSummary {
 export interface WorkflowRunFileChange {
   readonly status: string;
   readonly path: string;
+  readonly additions?: number;
+  readonly deletions?: number;
 }
 
 export interface WorkflowRunRepositoryChanges {
