@@ -1031,6 +1031,19 @@ const uniqueRunChoices = (
         ) === index
     );
 
+const inspectedRunChoiceFromCurrentState = (
+  state: ChatSessionState
+): ChatRunChoice | undefined =>
+  state.inspectedRunSummary
+    ? {
+        runSummary: state.inspectedRunSummary,
+        sessionId: state.sessionId,
+        projectRoot: state.lastRunProjectRoot ?? state.projectRoot ?? state.cwd,
+        source: "inspectedRunSummary",
+        ...runChoiceContextForSummary(state, state.inspectedRunSummary),
+      }
+    : undefined;
+
 const normalizeLoadedSessionState = ({
   current,
   loaded,
@@ -1048,6 +1061,7 @@ const normalizeLoadedSessionState = ({
   runChoices: uniqueRunChoices([
     ...(loaded.runChoices ?? []),
     ...(current.runChoices ?? []),
+    inspectedRunChoiceFromCurrentState(current),
   ]),
   ...(commandOptions.provider ? { providerName: commandOptions.provider } : {}),
   ...(commandOptions.model ? { modelName: commandOptions.model } : {}),

@@ -3171,6 +3171,15 @@ describe("chat session", () => {
         cwd: "/repo",
         dryRun: true,
       }),
+      lastRunTask: "perform the release check",
+      lastRunProjectRoot: "/repo/source-project",
+      lastRunWorkflowLocator: locator,
+      lastRunOptions: {
+        provider: "openrouter",
+        model: "openrouter/owl-alpha",
+        timeout: 2500,
+      },
+      lastRunSummary: runSummary,
       inspectedRunSummary: runSummary,
       runChoices: [
         {
@@ -3197,6 +3206,20 @@ describe("chat session", () => {
       sessionId: "release-session",
       runSummary: { executionId: "exec-chat-1" },
     });
+    expect(switched.state.runChoices).toContainEqual(
+      expect.objectContaining({
+        sessionId: "session-a",
+        projectRoot: "/repo/source-project",
+        runTask: "perform the release check",
+        runWorkflowLocator: locator,
+        runOptions: {
+          provider: "openrouter",
+          model: "openrouter/owl-alpha",
+          timeout: 2500,
+        },
+        runSummary: expect.objectContaining({ executionId: "exec-chat-1" }),
+      })
+    );
     expect(switched.state.messages.at(-1)?.content).toContain(
       "Switched to session release-session. Still showing run details exec-chat-1."
     );
