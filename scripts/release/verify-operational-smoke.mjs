@@ -246,6 +246,23 @@ const verifyCliChatOnceSmoke = async (tmpDir) => {
     'chat grouped session list text must preserve retry workflow and task metadata',
   );
 
+  const currentProjectSessionsText = await runCliText({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --list-sessions current project text',
+    args: ['chat', '--list-sessions', '--filter-project', 'current'],
+  });
+  assert(
+    currentProjectSessionsText.includes(sessionId) &&
+      currentProjectSessionsText.includes(projectDir),
+    'chat project-filtered session list text must include the current project session',
+  );
+  assert(
+    currentProjectSessionsText.includes('quickstart-judge') &&
+      currentProjectSessionsText.includes(chatTask),
+    'chat project-filtered session list text must preserve workflow and task metadata',
+  );
+
   const persistedState = await runCliJson({
     cwd: projectDir,
     env,
