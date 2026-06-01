@@ -555,6 +555,12 @@ describe("chat command with workflow web saves", () => {
       expect(textDetail).toContain(
         "Workflow locator: release-readiness (.obora/workflows/release-readiness.yaml)"
       );
+      expect(textDetail).toContain("tools: file_read");
+      expect(textDetail).toContain("artifacts: README.md");
+      expect(textDetail).toContain("decisions: Use project workflow");
+      expect(textDetail).toContain("tools: shell");
+      expect(textDetail).toContain("artifacts: release.json");
+      expect(textDetail).toContain("dependencies: collect");
     });
   });
 });
