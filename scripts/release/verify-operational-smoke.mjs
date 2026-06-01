@@ -474,6 +474,125 @@ const verifyCliChatRunHistorySmoke = async (tmpDir) => {
     'show-run must preserve the retry workflow locator',
   );
 
+  const auditSessionId = 'smoke-chat-audit-session';
+  const auditExecutionId = 'smoke-chat-audit-exec';
+  const auditSessionDir = join(projectDir, '.obora', 'chat', 'sessions');
+  const auditWorkflowLocator = {
+    id: 'external:audit-workflow',
+    scope: 'external',
+    name: 'smoke-chat-audit-workflow',
+    path: workflowPath,
+    displayPath: 'workflow.yaml',
+    editable: false,
+    sourceDir: workflowPath,
+    stepCount: 1,
+  };
+  const auditRunSummary = {
+    executionId: auditExecutionId,
+    workflowName: 'smoke-chat-audit-workflow',
+    status: 'completed',
+    startedAt: '2026-05-24T00:00:00.000Z',
+    endedAt: '2026-05-24T00:00:01.000Z',
+    durationMs: 1000,
+    completedStepCount: 1,
+    totalStepCount: 1,
+    message: 'Workflow completed: 1/1 steps completed.',
+    steps: [
+      {
+        name: 'collect-context',
+        status: 'completed',
+        agent: 'collector',
+        model: 'openrouter/owl-alpha',
+        task: 'Collect repository context',
+        outputPreview: 'Collected repository context.',
+        outputFormat: 'text',
+        methodology: 'Inspect persisted chat run detail',
+        rationale: 'The context is required for audit.',
+        toolsUsed: ['file_read'],
+        artifacts: ['audit-notes.md'],
+        decisions: ['Use saved run metadata'],
+        dependencies: ['bootstrap'],
+        issues: ['none'],
+      },
+    ],
+  };
+  await mkdir(auditSessionDir, { recursive: true });
+  await writeFile(
+    join(auditSessionDir, `${encodeURIComponent(auditSessionId)}.json`),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        updatedAt: '2026-05-24T00:00:02.000Z',
+        state: {
+          sessionId: auditSessionId,
+          status: 'ready',
+          cwd: projectDir,
+          projectRoot: runProjectRoot,
+          tags: ['smoke-run'],
+          dryRun: false,
+          workflowTarget: 'workflow.yaml',
+          messages: [
+            {
+              id: 'system:audit',
+              role: 'system',
+              content: 'Audit smoke session.',
+              createdAt: '2026-05-24T00:00:00.000Z',
+            },
+            {
+              id: 'assistant:audit-run',
+              role: 'assistant',
+              content: 'Workflow completed: 1/1 steps completed.',
+              createdAt: '2026-05-24T00:00:02.000Z',
+              workflowTarget: 'workflow.yaml',
+              runTask: 'Audit saved run detail',
+              runWorkflowLocator: auditWorkflowLocator,
+              runOptions: {
+                provider: 'openrouter',
+                model: 'openrouter/owl-alpha',
+                timeout: 2500,
+              },
+              runSummary: auditRunSummary,
+            },
+          ],
+          lastRunCommand: 'obora run workflow.yaml',
+          lastRunTask: 'Audit saved run detail',
+          lastRunProjectRoot: runProjectRoot,
+          lastRunWorkflowLocator: auditWorkflowLocator,
+          lastRunOptions: {
+            provider: 'openrouter',
+            model: 'openrouter/owl-alpha',
+            timeout: 2500,
+          },
+          lastRunSummary: auditRunSummary,
+        },
+      },
+      null,
+      2,
+    )}\n`,
+    'utf8',
+  );
+
+  const auditDetailText = await runCliText({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --show-run audit text',
+    args: ['chat', '--show-run', auditExecutionId, '--session', auditSessionId],
+  });
+  assert(
+    auditDetailText.includes(`Run ${auditExecutionId}`) &&
+      auditDetailText.includes('Step details:') &&
+      auditDetailText.includes('collect-context [completed] agent=collector model=openrouter/owl-alpha'),
+    'show-run text must include saved step title, agent, and model metadata',
+  );
+  assert(
+    auditDetailText.includes('tools: file_read') &&
+      auditDetailText.includes('artifacts: audit-notes.md') &&
+      auditDetailText.includes('decisions: Use saved run metadata') &&
+      auditDetailText.includes('dependencies: bootstrap') &&
+      auditDetailText.includes('issues: none'),
+    'show-run text must include saved tools, artifacts, decisions, dependencies, and issues',
+  );
+
   const retryState = await runCliJson({
     cwd: projectDir,
     env,
