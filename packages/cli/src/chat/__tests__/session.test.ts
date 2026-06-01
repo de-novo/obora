@@ -1279,6 +1279,13 @@ describe("chat session", () => {
       runWorkflow,
       commandOptions: {},
     });
+    const savedCustom = await handleChatInput({
+      input: "/diff save review/diff.md",
+      state: selected.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: {},
+    });
     const savedPath = join(
       chatCwd,
       ".obora",
@@ -1287,7 +1294,9 @@ describe("chat session", () => {
       "session-diff",
       "exec-chat-1.diff.md"
     );
+    const savedCustomPath = join(chatCwd, "review", "diff.md");
     const savedDiff = await readFile(savedPath, "utf-8");
+    const savedCustomDiff = await readFile(savedCustomPath, "utf-8");
 
     expect(selected.state.selectedRunFileChangeIndex).toBe(1);
     expect(selected.state.messages.at(-1)?.content).toBe(
@@ -1327,11 +1336,16 @@ describe("chat session", () => {
     expect(saved.state.messages.at(-1)?.content).toBe(
       `Saved changed file diff preview: ${savedPath}`
     );
+    expect(savedCustom.state.messages.at(-1)?.content).toBe(
+      `Saved changed file diff preview: ${savedCustomPath}`
+    );
     expect(savedDiff).toContain("# Chat Run Diff Preview");
     expect(savedDiff).toContain("Execution: exec-chat-1");
     expect(savedDiff).toContain("Changed files: 2");
     expect(savedDiff).toContain("Changed file 1: README.md");
     expect(savedDiff).toContain("+console.log('generated');");
+    expect(savedCustomDiff).toContain("# Chat Run Diff Preview");
+    expect(savedCustomDiff).toContain("Changed files: 2");
   });
 
   it("reports diff selection prerequisites and empty change sets", async () => {

@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { emitKeypressEvents } from "node:readline";
 import { createInterface } from "node:readline/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { Readable, Writable } from "node:stream";
 
 import { buildWorkflowRunSummary } from "@obora/sdk";
@@ -602,6 +602,20 @@ const savedRunDiffPath = (state: ChatSessionState): string =>
     `${safeDiffPathSegment(state.inspectedRunSummary?.executionId ?? "run")}.diff.md`
   );
 
+const saveDiffPathFromTarget = (
+  state: ChatSessionState,
+  target: string
+): string | undefined => {
+  const requested = target.startsWith("save ") ? target.slice("save ".length).trim() : "";
+  return requested
+    ? isAbsolute(requested)
+      ? requested
+      : resolve(state.projectRoot ?? state.cwd, requested)
+    : target === "save"
+      ? savedRunDiffPath(state)
+      : undefined;
+};
+
 const formatSavedRunDiffDocument = (
   summary: WorkflowRunSummary,
   files: ReadonlyArray<WorkflowRunFileChange>
@@ -623,10 +637,10 @@ const formatSavedRunDiffDocument = (
 
 const saveRunFileDiffs = async (
   state: ChatSessionState,
-  files: ReadonlyArray<WorkflowRunFileChange>
+  files: ReadonlyArray<WorkflowRunFileChange>,
+  path: string
 ): Promise<ChatTurnResult> => {
   const summary = state.inspectedRunSummary;
-  const path = savedRunDiffPath(state);
   return summary
     ? mkdir(dirname(path), { recursive: true })
         .then(() => writeFile(path, formatSavedRunDiffDocument(summary, files), "utf-8"))
@@ -682,9 +696,10 @@ const selectRunFileChange = (
   const files = inspectedRunFileChanges(state);
   const action = target === "next" || target === "prev" ? target : undefined;
   const selected = target === "open" ? selectedRunFileChange(state) : undefined;
+  const savePath = saveDiffPathFromTarget(state, target);
   const index = action ? undefined : fileChangeIndexFromTarget(target);
   if (action) return Promise.resolve(moveRunFileChangeSelection(state, action));
-  if (target === "save" && files.length > 0) return saveRunFileDiffs(state, files);
+  if (savePath && files.length > 0) return saveRunFileDiffs(state, files, savePath);
   if (target === "all" && files.length > 0) {
     return Promise.resolve({
       state: appendAssistant(state, formatRunAllFileDiffsMessage(files)),

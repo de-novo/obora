@@ -150,7 +150,7 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
     group: "details",
   },
   {
-    command: "/diff 1, /diff next, /diff prev, /diff open, /diff all, or /diff save",
+    command: "/diff 1, /diff next, /diff prev, /diff open, /diff all, /diff save, or /diff save <path>",
     description: "focuses, opens, or saves changed file diffs from run details",
     group: "details",
   },
