@@ -209,11 +209,15 @@ export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<st
   if (state.inspectedRunSummary) {
     return state.runChoices && state.runChoices.length > 0
       ? [
-          "Enter open  Tab next  Esc close  Ctrl+R retry",
+          "Enter open  Tab run  Left/Right diff  Esc close  Ctrl+R retry",
           "/clear  /diff 1  /diff next  /retry 1",
           "/runs  /session  /project  /help",
         ]
-      : ["Esc close  Ctrl+R retry", "/clear  /diff 1  /runs", "/session  /project  /help"];
+      : [
+          "Left/Right diff  Esc close  Ctrl+R retry",
+          "/clear  /diff 1  /runs",
+          "/session  /project  /help",
+        ];
   }
   if (state.runChoices && state.runChoices.length > 0) {
     return [

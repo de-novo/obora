@@ -31,6 +31,18 @@ const runSummary: WorkflowRunSummary = {
   steps: [],
 };
 
+const runSummaryWithChanges: WorkflowRunSummary = {
+  ...runSummary,
+  repositoryChanges: {
+    root: "/repo",
+    files: [
+      { status: "M", path: "README.md", diffPreview: ["-old", "+new"] },
+      { status: "??", path: "src/generated.js", diffPreview: ["+generated"] },
+    ],
+    summary: "2 files changed",
+  },
+};
+
 const runChoice: ChatRunChoice = {
   runSummary,
   sessionId: "session-a",
@@ -106,6 +118,19 @@ describe("commandForChatTuiKey", () => {
     expect(
       commandForChatTuiKey({ ...baseState, inspectedRunSummary: runSummary }, { name: "escape" })
     ).toBe("/clear");
+  });
+
+  it("maps left and right keys to focused run diff navigation", () => {
+    const state = {
+      ...baseState,
+      inspectedRunSummary: runSummaryWithChanges,
+      runChoices: [{ ...runChoice, runSummary: runSummaryWithChanges }],
+    };
+
+    expect(commandForChatTuiKey(state, { name: "right" })).toBe("/diff next");
+    expect(commandForChatTuiKey(state, { name: "left" })).toBe("/diff prev");
+    expect(commandForChatTuiKey({ ...baseState, inspectedRunSummary: runSummary }, { name: "right" }))
+      .toBeUndefined();
   });
 
   it("runs mapped picker commands through the keybinding callback", () => {

@@ -43,6 +43,21 @@ const keyAction = (key: ChatTuiKey): "next" | "prev" | "open" | undefined =>
         ? "open"
         : undefined;
 
+const hasDiffChoices = (state: ChatSessionState): boolean =>
+  Boolean(state.inspectedRunSummary?.repositoryChanges?.files.length);
+
+const diffCommandForKey = (
+  state: ChatSessionState,
+  key: ChatTuiKey
+): string | undefined =>
+  hasDiffChoices(state)
+    ? key.name === "right"
+      ? "/diff next"
+      : key.name === "left"
+        ? "/diff prev"
+        : undefined
+    : undefined;
+
 const hasOpenPanel = (state: ChatSessionState): boolean =>
   Boolean(
     state.inspectedRunSummary ||
@@ -73,5 +88,6 @@ export const commandForChatTuiKey = (
 ): string | undefined => {
   const picker = activePicker(state);
   const action = keyAction(key);
-  return picker && action ? pickerCommand(picker, action) : commandForPanelKey(state, picker, key);
+  return diffCommandForKey(state, key) ??
+    (picker && action ? pickerCommand(picker, action) : commandForPanelKey(state, picker, key));
 };

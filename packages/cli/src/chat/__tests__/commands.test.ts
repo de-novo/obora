@@ -119,7 +119,7 @@ describe("chat command metadata", () => {
         runChoices: [{ runSummary, sessionId: "session-a" }],
       })
     ).toEqual([
-      "Enter open  Tab next  Esc close  Ctrl+R retry",
+      "Enter open  Tab run  Left/Right diff  Esc close  Ctrl+R retry",
       "/clear  /diff 1  /diff next  /retry 1",
       "/runs  /session  /project  /help",
     ]);
