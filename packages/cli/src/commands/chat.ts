@@ -14,7 +14,7 @@ import {
   listChatSessionSummaries,
   loadChatSessionState,
 } from "../chat/store.js";
-import type { ChatSessionGroupBy } from "../chat/store.js";
+import type { ChatSessionGroupBy, ChatSessionSummaryGroup } from "../chat/store.js";
 import type { ChatCommandOptions } from "../chat/types.js";
 import { CLIError } from "../utils/cli-error.js";
 import { handleCommandAction } from "../utils/error-handler.js";
@@ -24,6 +24,27 @@ import { getGlobalOpts } from "../utils/global-opts.js";
 
 const parseSessionGroupBy = (value: string | undefined): ChatSessionGroupBy | undefined =>
   value === "project" || value === "tag" || value === "day" ? value : undefined;
+
+const sessionRetryColumn = (session: ChatSessionSummaryGroup["sessions"][number]): string =>
+  session.lastRunTask && session.lastRunWorkflowName ? session.lastRunWorkflowName : "-";
+
+const formatSessionTableRows = (
+  groups: ReadonlyArray<ChatSessionSummaryGroup>
+): Array<Record<string, unknown>> =>
+  groups.flatMap((group) =>
+    group.sessions.map((session) => ({
+      group: group.group,
+      sessionId: session.sessionId,
+      status: session.status,
+      project: session.projectRoot ?? session.cwd,
+      workflow: session.workflowTarget ?? "-",
+      retry: sessionRetryColumn(session),
+      lastTask: session.lastRunTask ?? "-",
+      tags: session.tags.length > 0 ? session.tags.join(", ") : "-",
+      messages: session.messageCount,
+      updatedAt: session.updatedAt,
+    }))
+  );
 
 export function createChatCommand(): Command {
   return new Command("chat")
@@ -84,15 +105,7 @@ export function createChatCommand(): Command {
             if (options.json || globalOpts.json) {
               formatter.json(grouped ?? sessions);
             } else {
-              formatter.table(
-                (grouped ?? [{ group: "sessions", sessions }]).flatMap((group) =>
-                  group.sessions.map((session) => ({
-                    group: group.group,
-                    ...session,
-                    tags: session.tags.join(", "),
-                  }))
-                )
-              );
+              formatter.table(formatSessionTableRows(grouped ?? [{ group: "sessions", sessions }]));
             }
             return;
           }

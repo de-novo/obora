@@ -125,7 +125,11 @@ describe("chat command", () => {
         sessionId: "session-a",
         status: "ready",
         cwd: "/repo",
-        tags: [],
+        projectRoot: "/repo/source-project",
+        workflowTarget: "release-readiness",
+        lastRunTask: "prepare release",
+        lastRunWorkflowName: "release-readiness",
+        tags: ["release"],
         messageCount: 2,
         updatedAt: "2026-05-24T00:00:00.000Z",
       },
@@ -135,7 +139,14 @@ describe("chat command", () => {
 
     expect(runChatSession).not.toHaveBeenCalled();
     expect(tableSpy).toHaveBeenCalledWith([
-      expect.objectContaining({ sessionId: "session-a" }),
+      expect.objectContaining({
+        sessionId: "session-a",
+        project: "/repo/source-project",
+        workflow: "release-readiness",
+        retry: "release-readiness",
+        lastTask: "prepare release",
+        tags: "release",
+      }),
     ]);
   });
 
