@@ -1,6 +1,7 @@
+import { mkdir, writeFile } from "node:fs/promises";
 import { emitKeypressEvents } from "node:readline";
 import { createInterface } from "node:readline/promises";
-import { resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { Readable, Writable } from "node:stream";
 
 import { buildWorkflowRunSummary } from "@obora/sdk";
@@ -588,6 +589,68 @@ const formatRunAllFileDiffsMessage = (
     ]),
   ].join("\n");
 
+const safeDiffPathSegment = (value: string): string =>
+  value.replace(/[^a-zA-Z0-9._-]+/gu, "-").replace(/^-+|-+$/gu, "") || "unknown";
+
+const savedRunDiffPath = (state: ChatSessionState): string =>
+  join(
+    state.projectRoot ?? state.cwd,
+    ".obora",
+    "chat",
+    "diffs",
+    safeDiffPathSegment(state.sessionId),
+    `${safeDiffPathSegment(state.inspectedRunSummary?.executionId ?? "run")}.diff.md`
+  );
+
+const formatSavedRunDiffDocument = (
+  summary: WorkflowRunSummary,
+  files: ReadonlyArray<WorkflowRunFileChange>
+): string =>
+  [
+    `# Chat Run Diff Preview`,
+    "",
+    `Execution: ${summary.executionId}`,
+    `Workflow: ${summary.workflowName}`,
+    `Status: ${summary.status}`,
+    ...(summary.repositoryChanges?.root ? [`Repository root: ${summary.repositoryChanges.root}`] : []),
+    ...(summary.repositoryChanges?.summary ? [`Summary: ${summary.repositoryChanges.summary}`] : []),
+    "",
+    "```diff",
+    formatRunAllFileDiffsMessage(files),
+    "```",
+    "",
+  ].join("\n");
+
+const saveRunFileDiffs = async (
+  state: ChatSessionState,
+  files: ReadonlyArray<WorkflowRunFileChange>
+): Promise<ChatTurnResult> => {
+  const summary = state.inspectedRunSummary;
+  const path = savedRunDiffPath(state);
+  return summary
+    ? mkdir(dirname(path), { recursive: true })
+        .then(() => writeFile(path, formatSavedRunDiffDocument(summary, files), "utf-8"))
+        .then(
+          (): ChatTurnResult => ({
+            state: appendAssistant(state, `Saved changed file diff preview: ${path}`),
+            exit: false,
+          })
+        )
+        .catch(
+          (error: unknown): ChatTurnResult => ({
+            state: appendAssistant(state, `Failed to save changed file diff preview: ${errorMessage(error)}`),
+            exit: false,
+          })
+        )
+    : {
+        state: appendAssistant(
+          state,
+          "Open run details before saving a diff. Use /details <executionId> first."
+        ),
+        exit: false,
+      };
+};
+
 const moveRunFileChangeSelection = (
   state: ChatSessionState,
   direction: "next" | "prev"
@@ -615,47 +678,46 @@ const moveRunFileChangeSelection = (
 const selectRunFileChange = (
   state: ChatSessionState,
   target: string
-): ChatTurnResult => {
+): Promise<ChatTurnResult> => {
   const files = inspectedRunFileChanges(state);
   const action = target === "next" || target === "prev" ? target : undefined;
   const selected = target === "open" ? selectedRunFileChange(state) : undefined;
-  const all = target === "all";
   const index = action ? undefined : fileChangeIndexFromTarget(target);
-  return action
-    ? moveRunFileChangeSelection(state, action)
-    : all && files.length > 0
-      ? {
-          state: appendAssistant(state, formatRunAllFileDiffsMessage(files)),
-          exit: false,
-        }
-    : selected
-      ? {
-          state: appendAssistant(
-            state,
-            formatRunFileDiffMessage(selected[0], selected[1])
-          ),
-          exit: false,
-        }
-    : index !== undefined && files[index]
-      ? {
-          state: appendAssistant(
-            {
-              ...state,
-              selectedRunFileChangeIndex: index,
-            },
-            `Selected changed file ${index + 1}: ${files[index].path}.`
-          ),
-          exit: false,
-        }
-      : {
-          state: appendAssistant(
-            state,
-            files.length > 0
-              ? "Changed file not found. Use /diff 1, /diff next, or /diff all."
-              : "No changed files are available in the open run details."
-          ),
-          exit: false,
-        };
+  if (action) return Promise.resolve(moveRunFileChangeSelection(state, action));
+  if (target === "save" && files.length > 0) return saveRunFileDiffs(state, files);
+  if (target === "all" && files.length > 0) {
+    return Promise.resolve({
+      state: appendAssistant(state, formatRunAllFileDiffsMessage(files)),
+      exit: false,
+    });
+  }
+  if (selected) {
+    return Promise.resolve({
+      state: appendAssistant(state, formatRunFileDiffMessage(selected[0], selected[1])),
+      exit: false,
+    });
+  }
+  if (index !== undefined && files[index]) {
+    return Promise.resolve({
+      state: appendAssistant(
+        {
+          ...state,
+          selectedRunFileChangeIndex: index,
+        },
+        `Selected changed file ${index + 1}: ${files[index].path}.`
+      ),
+      exit: false,
+    });
+  }
+  return Promise.resolve({
+    state: appendAssistant(
+      state,
+      files.length > 0
+        ? "Changed file not found. Use /diff 1, /diff next, /diff all, or /diff save."
+        : "No changed files are available in the open run details."
+    ),
+    exit: false,
+  });
 };
 
 const runChoiceEntryForTarget = (

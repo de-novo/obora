@@ -150,8 +150,8 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
     group: "details",
   },
   {
-    command: "/diff 1, /diff next, /diff prev, /diff open, or /diff all",
-    description: "focuses or opens changed file diffs from run details",
+    command: "/diff 1, /diff next, /diff prev, /diff open, /diff all, or /diff save",
+    description: "focuses, opens, or saves changed file diffs from run details",
     group: "details",
   },
   {
@@ -214,12 +214,12 @@ export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<st
       ? state.runChoices && state.runChoices.length > 0
         ? [
           "Enter run  o open diff  Left/Right diff  Esc close  Ctrl+R retry",
-          "/clear  /diff open  /diff all  /diff next  /retry 1",
+          "/clear  /diff open  /diff all  /diff save  /retry 1",
           "/runs  /session  /project  /help",
         ]
         : [
           "o open diff  Left/Right diff  Esc close  Ctrl+R retry",
-          "/clear  /diff open  /diff all  /runs",
+          "/clear  /diff open  /diff all  /diff save",
           "/session  /project  /help",
         ]
       : state.runChoices && state.runChoices.length > 0

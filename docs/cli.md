@@ -671,7 +671,7 @@ obora chat --show-run <executionId> [--session <id>]
 - `/run <task>` runs the current workflow with an explicit task message.
 - `/run --workflow <name-or-path> <task>` runs one task with a different workflow without changing the session default.
 - `/details 1` or `/details <executionId>` shows recorded step outputs, tools, artifacts, decisions, and issues for a prior workflow result.
-- `/diff open` opens the focused changed file preview from the open run details, and `/diff all` prints all changed file previews as one copyable chat message.
+- `/diff open` opens the focused changed file preview from the open run details, `/diff all` prints all changed file previews as one copyable chat message, and `/diff save` writes them under `.obora/chat/diffs/`.
 - `/runs --all` and filtered `/runs ...` lists show the saved task text, retry target, source session, and compact run options for each persisted chat run.
 - `/runs --session 1` or `/runs --session <id>` lists persisted runs for a numbered or known session.
 - `/runs failed` is a shortcut for `/runs --status failed` when triaging failed persisted chat runs.

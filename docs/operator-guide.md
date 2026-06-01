@@ -172,7 +172,7 @@ obora chat --session release-qa --once "/retry <executionId>"
 - chat session 목록에서 project/workflow/retry/last task/tags/message count/updated time 확인
 - `chat --show-session --session <id>` 기본 텍스트 출력으로 project, selected workflow, provider/model, retry target, retry command/options, 최근 메시지 확인
 - chat session에 저장된 workflow run 목록, saved message/workflow target/source project/retry workflow/run options, step별 output/tools/artifacts/decisions/dependencies/issues 상세
-- TUI 안에서는 `/runs`로 chat run 목록을 열고, `Tab`/`Shift+Tab`으로 선택을 이동하고, `Enter` 또는 `/details 1`로 번호 기반 상세를 확인하고, 변경 파일이 기록된 실행에서는 `/diff open` 또는 `/diff all`로 diff preview를 채팅 메시지에 펼치며, `Ctrl+R` 또는 `/retry 1`로 저장된 task를 재실행
+- TUI 안에서는 `/runs`로 chat run 목록을 열고, `Tab`/`Shift+Tab`으로 선택을 이동하고, `Enter` 또는 `/details 1`로 번호 기반 상세를 확인하고, 변경 파일이 기록된 실행에서는 `/diff open` 또는 `/diff all`로 diff preview를 채팅 메시지에 펼치거나 `/diff save`로 `.obora/chat/diffs/`에 저장하며, `Ctrl+R` 또는 `/retry 1`로 저장된 task를 재실행
 - dry-run chat도 `last result completed 0/0`과 `/details dry-run-...` 링크를 남기므로, 실제 실행 전 검증 결과도 같은 세션 감사 흐름으로 확인
 - 저장된 chat task를 source project와 saved provider/model/config/agents/policy/timeout 옵션을 우선 사용해 재실행하는 retry 경로
 

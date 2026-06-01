@@ -71,7 +71,7 @@ describe("chat command metadata", () => {
       "  /details 1 or /details <executionId> - shows latest or selected step results"
     );
     expect(chatHelp).toContain(
-      "  /diff 1, /diff next, /diff prev, /diff open, or /diff all - focuses or opens changed file diffs from run details"
+      "  /diff 1, /diff next, /diff prev, /diff open, /diff all, or /diff save - focuses, opens, or saves changed file diffs from run details"
     );
     expect(chatHelp).toContain(
       "  /runs --session 1 or /runs --session <id> - lists persisted runs for one session"
@@ -143,7 +143,7 @@ describe("chat command metadata", () => {
       })
     ).toEqual([
       "Enter run  o open diff  Left/Right diff  Esc close  Ctrl+R retry",
-      "/clear  /diff open  /diff all  /diff next  /retry 1",
+      "/clear  /diff open  /diff all  /diff save  /retry 1",
       "/runs  /session  /project  /help",
     ]);
     expect(

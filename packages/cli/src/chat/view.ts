@@ -376,7 +376,7 @@ const runDetailHeaderLines = (
       ? [
           `${muted("changed")} ${summary.repositoryChanges.summary}`,
           `${muted("change root")} ${compactPath(summary.repositoryChanges.root, 72)}`,
-          `${muted("diff focus")} /diff open   /diff all   /diff next   /diff prev`,
+          `${muted("diff focus")} /diff open   /diff all   /diff save   /diff next`,
         ]
       : []),
     `${muted("open")} /details ${summary.executionId}`,

@@ -1207,6 +1207,7 @@ describe("chat session", () => {
   });
 
   it("selects changed files inside open run details", async () => {
+    const chatCwd = await mkdtemp(join(tmpdir(), "obora-chat-diff-save-"));
     const runSummary = {
       ...buildWorkflowRunSummary(executionResult),
       repositoryChanges: {
@@ -1229,7 +1230,7 @@ describe("chat session", () => {
     const state = {
       ...createInitialChatState({
         sessionId: "session-diff",
-        cwd: "/repo",
+        cwd: chatCwd,
         dryRun: false,
       }),
       inspectedRunSummary: runSummary,
@@ -1271,6 +1272,22 @@ describe("chat session", () => {
       runWorkflow,
       commandOptions: {},
     });
+    const saved = await handleChatInput({
+      input: "/diff save",
+      state: selected.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: {},
+    });
+    const savedPath = join(
+      chatCwd,
+      ".obora",
+      "chat",
+      "diffs",
+      "session-diff",
+      "exec-chat-1.diff.md"
+    );
+    const savedDiff = await readFile(savedPath, "utf-8");
 
     expect(selected.state.selectedRunFileChangeIndex).toBe(1);
     expect(selected.state.messages.at(-1)?.content).toBe(
@@ -1280,7 +1297,7 @@ describe("chat session", () => {
     expect(moved.state.messages.at(-1)?.content).toBe("Selected changed file 1: README.md.");
     expect(missing.state.selectedRunFileChangeIndex).toBe(0);
     expect(missing.state.messages.at(-1)?.content).toBe(
-      "Changed file not found. Use /diff 1, /diff next, or /diff all."
+      "Changed file not found. Use /diff 1, /diff next, /diff all, or /diff save."
     );
     expect(opened.state.selectedRunFileChangeIndex).toBe(1);
     expect(opened.state.messages.at(-1)?.content).toBe(
@@ -1307,6 +1324,14 @@ describe("chat session", () => {
         "+console.log('generated');",
       ].join("\n")
     );
+    expect(saved.state.messages.at(-1)?.content).toBe(
+      `Saved changed file diff preview: ${savedPath}`
+    );
+    expect(savedDiff).toContain("# Chat Run Diff Preview");
+    expect(savedDiff).toContain("Execution: exec-chat-1");
+    expect(savedDiff).toContain("Changed files: 2");
+    expect(savedDiff).toContain("Changed file 1: README.md");
+    expect(savedDiff).toContain("+console.log('generated');");
   });
 
   it("reports diff selection prerequisites and empty change sets", async () => {
@@ -1383,7 +1408,7 @@ describe("chat session", () => {
       "No changed files are available in the open run details."
     );
     expect(invalid.state.messages.at(-1)?.content).toBe(
-      "Changed file not found. Use /diff 1, /diff next, or /diff all."
+      "Changed file not found. Use /diff 1, /diff next, /diff all, or /diff save."
     );
     const opened = await handleChatInput({
       input: "/diff open",
