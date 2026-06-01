@@ -251,14 +251,71 @@ describe("chat command", () => {
       sessionId: "session-a",
       status: "ready",
       cwd: "/repo",
+      projectRoot: "/repo/source-project",
       dryRun: false,
       workflowTarget: "release-readiness",
-      messages: [],
+      tags: ["release"],
+      providerName: "openrouter",
+      modelName: "openrouter/owl-alpha",
+      lastRunTask: "prepare release",
+      lastRunProjectRoot: "/repo/source-project",
+      lastRunOptions: {
+        provider: "openrouter",
+        model: "openrouter/owl-alpha",
+        timeout: 2500,
+      },
+      lastRunSummary: {
+        executionId: "exec-session",
+        workflowName: "release-readiness",
+        status: "completed",
+        startedAt: "2026-05-24T00:00:00.000Z",
+        completedStepCount: 1,
+        totalStepCount: 1,
+        message: "Workflow completed: 1/1 steps completed.",
+        steps: [],
+      },
+      messages: [
+        {
+          id: "user:1",
+          role: "user",
+          content: "prepare release",
+          createdAt: "2026-05-24T00:00:00.000Z",
+        },
+      ],
     });
 
     await createChatCommand().parseAsync(["--show-session", "--session", "session-a"], {
       from: "user",
     });
+
+    expect(runChatSession).not.toHaveBeenCalled();
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Session session-a"));
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("Project: /repo/source-project")
+    );
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("Retry: release-readiness -> prepare release")
+    );
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Details: /details exec-session"));
+    expect(console.log).not.toHaveBeenCalledWith(expect.stringContaining('"sessionId"'));
+  });
+
+  it("prints persisted chat session JSON when requested", async () => {
+    vi.mocked(loadChatSessionState).mockResolvedValue({
+      sessionId: "session-a",
+      status: "ready",
+      cwd: "/repo",
+      dryRun: false,
+      workflowTarget: "release-readiness",
+      messages: [],
+    });
+
+    await createChatCommand().parseAsync(
+      ["--show-session", "--session", "session-a", "--json"],
+      {
+        from: "user",
+      }
+    );
 
     expect(runChatSession).not.toHaveBeenCalled();
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"sessionId": "session-a"'));

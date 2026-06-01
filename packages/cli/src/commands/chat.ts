@@ -2,6 +2,7 @@ import { Command } from "commander";
 
 import { runChatSession } from "../chat/session.js";
 import { formatChatRunDetail } from "../chat/run-detail-format.js";
+import { formatChatSessionDetail } from "../chat/session-detail-format.js";
 import {
   formatCompactChatRunOptions,
   formatChatRunOptionsOrDefault,
@@ -121,7 +122,11 @@ export function createChatCommand(): Command {
             if (!state) {
               throw new CLIError(`Chat session not found: ${options.session}`, ExitCode.CLI_ERROR);
             }
-            formatter.json(state);
+            if (options.json || globalOpts.json) {
+              formatter.json(state);
+            } else {
+              console.log(formatChatSessionDetail(state));
+            }
             return;
           }
 
