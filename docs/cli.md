@@ -619,7 +619,7 @@ obora chat [workflow] --once <message> --dry-run
 obora chat --workflow <workflow> --session <id>
 obora chat --list-sessions [--json]
 obora chat --list-sessions --group-sessions project|tag|day [--filter-tag <tag>] [--filter-project <path|current>] [--json]
-obora chat --show-session --session <id>
+obora chat --show-session --session <id> [--json]
 obora chat --list-runs [--session <id>] [--filter-run-status <status>] [--filter-tag <tag>] [--filter-project <path|current>] [--json]
 obora chat --show-run <executionId> [--session <id>]
 ```
@@ -635,7 +635,7 @@ obora chat --show-run <executionId> [--session <id>]
 - `--group-sessions <project|tag|day>` group listed sessions by project root, tag, or updated day
 - `--filter-tag <tag>` only list sessions with the given tag
 - `--filter-project <path|current>` only list sessions for a project root
-- `--show-session` print the persisted chat session selected by `--session`
+- `--show-session` print a readable persisted chat session summary selected by `--session`; add `--json` for the raw saved state
 - `--list-runs` list persisted workflow runs without starting the TUI, including saved task, retry target, and compact run options; with `--session`, search only that session
 - `--filter-run-status <queued|running|waiting|suspended|completed|failed|aborted>` only list persisted workflow runs with the given status
 - `--show-run <executionId>` print a persisted workflow run summary with step details and full saved run options; with `--session`, search only that session
@@ -655,6 +655,8 @@ obora chat --show-run <executionId> [--session <id>]
 - Renders an `@earendil-works/pi-tui` differential terminal chat console with a Codex/Claude-style session card, conversation stream, workflow inspector, run/audit state, and bottom command bar.
 - Persists chat sessions under `.obora/chat/sessions/`; reusing `--session <id>` restores prior messages, selected workflow state, and run summaries.
 - New chat sessions store the resolved project root and optional comma-separated tags so session lists can be grouped by project, tag, or day.
+- `chat --list-sessions` text output shows project, selected workflow, retry workflow, last task, tags, message count, and updated time so reusable sessions can be picked without opening raw JSON.
+- `chat --show-session --session <id>` text output summarizes project, tags, workflow, provider/model, retry target, retry command, retry options, last result, details link, and recent messages; `--json` preserves the raw session state for automation.
 - Persisted run summaries expose the saved chat message, workflow target, source project, retry workflow, run options, step-level status, agent, model, output preview, tools, artifacts, decisions, dependencies, and issues through `--show-run`; add `--json` for the raw persisted detail object.
 - `/runs` and `chat --list-runs` use compact run-option text such as `provider openrouter · model openrouter/owl-alpha · timeout 2500ms · files+3`; `--show-run` keeps full `config`, `agents`, and `policy` paths for audit.
 - The TUI shows `/details <executionId>` on workflow result messages; run lists also support `/details 1` for the first numbered run.
@@ -690,6 +692,10 @@ obora chat --workflow ~/.obora/workflows/code-review.yaml --session review-sessi
 obora chat release-readiness --model openrouter/owl-alpha
 obora chat release-readiness --session release-qa --tags release,qa
 obora chat --list-sessions --group-sessions tag --filter-tag release --json
+obora chat --show-session --session release-qa
+obora chat --show-session --session release-qa --json
+obora chat --list-runs --session release-qa
+obora chat --show-run <executionId> --session release-qa
 ```
 
 ### Exit Codes

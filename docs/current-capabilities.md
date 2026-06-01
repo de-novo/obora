@@ -100,6 +100,8 @@ obora judge
 - `test`로 workflow test 실행
 - `chat`으로 선택한 workflow에 operator message를 주입하는 TUI 세션 실행
 - chat session 안에서 workflow를 전환하고, project/tag/time 기준으로 세션을 다시 찾고, 저장된 workflow run 상세를 조회
+- `chat --list-sessions` 텍스트 출력에서 project/workflow/retry/last task/tags/message count를 보고 재사용할 세션을 고를 수 있음
+- `chat --show-session --session <id>` 기본 출력으로 세션의 retry target, retry command/options, last result, 최근 메시지를 사람이 읽는 형태로 확인하고, `--json`으로 raw session state를 자동화에 연결할 수 있음
 - `policy`로 policy validate/query 같은 정책 surface 실행
 
 ### 2.3 운영 / 관찰 / 사후 분석
