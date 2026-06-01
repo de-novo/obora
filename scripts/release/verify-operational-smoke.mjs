@@ -192,6 +192,32 @@ const verifyCliChatOnceSmoke = async (tmpDir) => {
     'chat session list must include the saved once session and task',
   );
 
+  const sessionsText = await runCliText({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --list-sessions text',
+    args: ['chat', '--list-sessions'],
+  });
+  assert(
+    sessionsText.includes('sessionId') &&
+      sessionsText.includes('workflow') &&
+      sessionsText.includes('retry') &&
+      sessionsText.includes('lastTask'),
+    'chat session list text must expose session, workflow, retry, and last task columns',
+  );
+  assert(
+    sessionsText.includes(sessionId),
+    'chat session list text must include the saved session id',
+  );
+  assert(
+    sessionsText.includes('quickstart-judge'),
+    'chat session list text must include the retry workflow name',
+  );
+  assert(
+    sessionsText.includes(chatTask),
+    'chat session list text must include the saved chat task',
+  );
+
   const persistedState = await runCliJson({
     cwd: projectDir,
     env,
