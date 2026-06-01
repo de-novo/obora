@@ -202,6 +202,9 @@ const verifyCliChatOnceSmoke = async (tmpDir) => {
     sessions.some((session) => session.sessionId === sessionId && session.lastRunTask === chatTask),
     'chat session list must include the saved once session and task',
   );
+  const savedSession = sessions.find((session) => session.sessionId === sessionId);
+  const savedSessionDay = savedSession?.updatedAt?.slice?.(0, 10);
+  assert(savedSessionDay, 'chat session list must include an updated day for grouping');
 
   const sessionsText = await runCliText({
     cwd: projectDir,
@@ -244,6 +247,23 @@ const verifyCliChatOnceSmoke = async (tmpDir) => {
   assert(
     groupedSessionsText.includes('quickstart-judge') && groupedSessionsText.includes(chatTask),
     'chat grouped session list text must preserve retry workflow and task metadata',
+  );
+
+  const dayGroupedSessionsText = await runCliText({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --list-sessions day grouped text',
+    args: ['chat', '--list-sessions', '--group-sessions', 'day'],
+  });
+  assert(
+    dayGroupedSessionsText.includes('group') &&
+      dayGroupedSessionsText.includes(savedSessionDay) &&
+      dayGroupedSessionsText.includes(sessionId),
+    'chat day-grouped session list text must include the updated day group and saved session id',
+  );
+  assert(
+    dayGroupedSessionsText.includes('quickstart-judge') && dayGroupedSessionsText.includes(chatTask),
+    'chat day-grouped session list text must preserve workflow and task metadata',
   );
 
   const currentProjectSessionsText = await runCliText({
