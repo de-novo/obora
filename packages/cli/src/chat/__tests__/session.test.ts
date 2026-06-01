@@ -145,7 +145,19 @@ describe("chat session", () => {
       })
     );
     expect(ran.state.status).toBe("ready");
+    expect(ran.state.lastRunSummary).toMatchObject({
+      workflowName: "release-readiness",
+      status: "completed",
+      completedStepCount: 0,
+      totalStepCount: 0,
+      message: "Dry-run completed. The workflow accepted this chat task.",
+      steps: [],
+    });
+    expect(ran.state.lastRunSummary?.executionId).toContain("dry-run-session-a-");
     expect(ran.state.messages.at(-1)?.content).toContain("Dry-run completed");
+    expect(ran.state.messages.at(-1)?.runSummary?.executionId).toBe(
+      ran.state.lastRunSummary?.executionId
+    );
   });
 
   it("opens help as the active panel and clears stale panel context", async () => {

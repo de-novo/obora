@@ -300,6 +300,16 @@ const verifyCliChatOnceSmoke = async (tmpDir) => {
   assert(finalState.workflowLocator?.name === 'quickstart-judge', 'chat once must resolve judge.yaml');
   assert(finalState.lastRunTask === chatTask, 'chat once must treat the input message as the task source');
   assert(
+    finalState.lastRunSummary?.status === 'completed' &&
+      finalState.lastRunSummary.completedStepCount === 0 &&
+      finalState.lastRunSummary.totalStepCount === 0,
+    'chat once dry-run must store a completed run summary',
+  );
+  assert(
+    finalState.lastRunSummary?.executionId?.startsWith?.(`dry-run-${sessionId}-`) === true,
+    'chat once dry-run summary must use a retryable dry-run execution id',
+  );
+  assert(
     finalState.lastRunCommand === 'obora run judge.yaml',
     'chat once must record the executable workflow command',
   );
@@ -308,6 +318,14 @@ const verifyCliChatOnceSmoke = async (tmpDir) => {
       (message) => message.role === 'user' && message.content === chatTask,
     ) === true,
     'chat once must persist the user task as a chat message',
+  );
+  assert(
+    finalState.messages?.some?.(
+      (message) =>
+        message.role === 'assistant' &&
+        message.runSummary?.executionId === finalState.lastRunSummary?.executionId,
+    ) === true,
+    'chat once dry-run assistant message must link to the stored run summary',
   );
 
   const sessions = await runCliJson({
@@ -435,6 +453,10 @@ const verifyCliChatOnceSmoke = async (tmpDir) => {
     persistedState.lastRunTask === chatTask,
     'show-session must preserve the original chat task',
   );
+  assert(
+    persistedState.lastRunSummary?.executionId === finalState.lastRunSummary?.executionId,
+    'show-session must preserve the dry-run summary for details',
+  );
 
   const persistedText = await runCliText({
     cwd: projectDir,
@@ -453,6 +475,10 @@ const verifyCliChatOnceSmoke = async (tmpDir) => {
   assert(
     persistedText.includes('Retry command: obora run judge.yaml'),
     'show-session text must expose the retry command',
+  );
+  assert(
+    persistedText.includes(`Details: /details ${finalState.lastRunSummary.executionId}`),
+    'show-session text must expose the dry-run details command',
   );
   assert(
     persistedText.includes(`- user`) && persistedText.includes(chatTask),

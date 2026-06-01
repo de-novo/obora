@@ -350,6 +350,31 @@ const formatRunSummaryMessage = (
       ? `${runSummary.message} > ${runSummary.steps.map((step) => step.name).join(", ")}`
       : "Workflow run completed for this chat task.";
 
+const dryRunExecutionId = (sessionId: string, timestamp: string): string =>
+  `dry-run-${sessionId}-${timestamp.replace(/[:.]/gu, "-")}`;
+
+const createDryRunSummary = ({
+  sessionId,
+  workflowName,
+}: {
+  readonly sessionId: string;
+  readonly workflowName: string;
+}): WorkflowRunSummary => {
+  const timestamp = new Date().toISOString();
+  return {
+    executionId: dryRunExecutionId(sessionId, timestamp),
+    workflowName,
+    status: "completed",
+    startedAt: timestamp,
+    endedAt: timestamp,
+    durationMs: 0,
+    completedStepCount: 0,
+    totalStepCount: 0,
+    message: "Dry-run completed. The workflow accepted this chat task.",
+    steps: [],
+  };
+};
+
 const findRunSummaryInState = (
   state: ChatSessionState,
   executionId: string
@@ -1376,7 +1401,14 @@ const runChatTask = ({
 
   return runWorkflowWithRetry(runWorkflow, workflowLocator.path, runOptions)
     .then((execution): ChatTurnResult => {
-      const runSummary = execution ? buildWorkflowRunSummary(execution) : undefined;
+      const runSummary = execution
+        ? buildWorkflowRunSummary(execution)
+        : commandOptions.dryRun
+          ? createDryRunSummary({
+              sessionId: state.sessionId,
+              workflowName: workflowLocator.name,
+            })
+          : undefined;
       return {
         state: appendAssistant(
           {
