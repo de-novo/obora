@@ -813,6 +813,11 @@ describe("renderChatView", () => {
     expect(plain).toContain(
       "options provider openrouter · model openrouter/owl-alpha · timeout 2500ms · files+3"
     );
+    expect(plain).toContain("tools file_read, file_write");
+    expect(plain).toContain("artifacts release-notes.md");
+    expect(plain).toContain("why Use release notes");
+    expect(plain).toContain("rationale The notes are the requested artifact.");
+    expect(plain).toContain("depends collect");
   });
 
   it("keeps run history retry and compact options readable in narrow terminals", () => {
