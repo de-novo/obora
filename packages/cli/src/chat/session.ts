@@ -577,6 +577,17 @@ const formatRunFileDiffMessage = (
       : ["No diff preview recorded."]),
   ].join("\n");
 
+const formatRunAllFileDiffsMessage = (
+  files: ReadonlyArray<WorkflowRunFileChange>
+): string =>
+  [
+    `Changed files: ${files.length}`,
+    ...files.flatMap((file, index) => [
+      "",
+      formatRunFileDiffMessage(file, index),
+    ]),
+  ].join("\n");
+
 const moveRunFileChangeSelection = (
   state: ChatSessionState,
   direction: "next" | "prev"
@@ -608,9 +619,15 @@ const selectRunFileChange = (
   const files = inspectedRunFileChanges(state);
   const action = target === "next" || target === "prev" ? target : undefined;
   const selected = target === "open" ? selectedRunFileChange(state) : undefined;
+  const all = target === "all";
   const index = action ? undefined : fileChangeIndexFromTarget(target);
   return action
     ? moveRunFileChangeSelection(state, action)
+    : all && files.length > 0
+      ? {
+          state: appendAssistant(state, formatRunAllFileDiffsMessage(files)),
+          exit: false,
+        }
     : selected
       ? {
           state: appendAssistant(
@@ -634,7 +651,7 @@ const selectRunFileChange = (
           state: appendAssistant(
             state,
             files.length > 0
-              ? "Changed file not found. Use /diff 1 or /diff next."
+              ? "Changed file not found. Use /diff 1, /diff next, or /diff all."
               : "No changed files are available in the open run details."
           ),
           exit: false,

@@ -1264,6 +1264,13 @@ describe("chat session", () => {
       runWorkflow,
       commandOptions: {},
     });
+    const openedAll = await handleChatInput({
+      input: "/diff all",
+      state: selected.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: {},
+    });
 
     expect(selected.state.selectedRunFileChangeIndex).toBe(1);
     expect(selected.state.messages.at(-1)?.content).toBe(
@@ -1273,11 +1280,27 @@ describe("chat session", () => {
     expect(moved.state.messages.at(-1)?.content).toBe("Selected changed file 1: README.md.");
     expect(missing.state.selectedRunFileChangeIndex).toBe(0);
     expect(missing.state.messages.at(-1)?.content).toBe(
-      "Changed file not found. Use /diff 1 or /diff next."
+      "Changed file not found. Use /diff 1, /diff next, or /diff all."
     );
     expect(opened.state.selectedRunFileChangeIndex).toBe(1);
     expect(opened.state.messages.at(-1)?.content).toBe(
       [
+        "Changed file 2: src/generated.js",
+        "Status: ??",
+        "Diff preview:",
+        "+console.log('generated');",
+      ].join("\n")
+    );
+    expect(openedAll.state.messages.at(-1)?.content).toBe(
+      [
+        "Changed files: 2",
+        "",
+        "Changed file 1: README.md",
+        "Status: M",
+        "Diff preview:",
+        "-old readme",
+        "+new readme",
+        "",
         "Changed file 2: src/generated.js",
         "Status: ??",
         "Diff preview:",
@@ -1319,6 +1342,16 @@ describe("chat session", () => {
       runWorkflow,
       commandOptions: {},
     });
+    const emptyAll = await handleChatInput({
+      input: "/diff all",
+      state: {
+        ...baseState,
+        inspectedRunSummary: buildWorkflowRunSummary(executionResult),
+      },
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: {},
+    });
     const invalid = await handleChatInput({
       input: "/diff file",
       state: {
@@ -1346,8 +1379,11 @@ describe("chat session", () => {
     expect(emptyOpen.state.messages.at(-1)?.content).toBe(
       "No changed files are available in the open run details."
     );
+    expect(emptyAll.state.messages.at(-1)?.content).toBe(
+      "No changed files are available in the open run details."
+    );
     expect(invalid.state.messages.at(-1)?.content).toBe(
-      "Changed file not found. Use /diff 1 or /diff next."
+      "Changed file not found. Use /diff 1, /diff next, or /diff all."
     );
     const opened = await handleChatInput({
       input: "/diff open",
