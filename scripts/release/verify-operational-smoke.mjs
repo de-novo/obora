@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFile } from 'node:child_process';
 import { constants } from 'node:fs';
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -76,6 +76,34 @@ const runCliText = async ({ cwd, env, args, label }) => {
   });
   assert(stderr.trim().length === 0, `${label} wrote to stderr: ${stderr.trim()}`);
   return stripAnsi(stdout);
+};
+
+const shellQuote = (value) => `'${String(value).replace(/'/gu, "'\\''")}'`;
+
+const scriptArgs = ({ capturePath, args }) =>
+  process.platform === 'darwin'
+    ? ['-q', capturePath, process.execPath, cliPath, ...args]
+    : [
+        '-q',
+        '-c',
+        [process.execPath, cliPath, ...args].map(shellQuote).join(' '),
+        capturePath,
+      ];
+
+const canRunScriptTty = () => Boolean(process.stdin.isTTY && process.stdout.isTTY);
+
+const runCliTtyText = async ({ cwd, env, args, label, capturePath }) => {
+  if (!canRunScriptTty()) {
+    console.log(`[SKIP] ${label} requires an attached TTY.`);
+    return undefined;
+  }
+  const { stderr } = await execFileAsync('script', scriptArgs({ capturePath, args }), {
+    cwd,
+    env,
+    maxBuffer: 1024 * 1024,
+  });
+  assert(stderr.trim().length === 0, `${label} wrote to stderr: ${stderr.trim()}`);
+  return stripAnsi(await readFile(capturePath, 'utf8')).replace(/\r/gu, '');
 };
 
 const stripAnsi = (value) =>
@@ -488,6 +516,37 @@ const verifyCliChatOnceSmoke = async (tmpDir) => {
     !persistedText.includes('"sessionId"'),
     'show-session text must not fall back to raw JSON without --json',
   );
+
+  const ttyCapturePath = join(tmpDir, 'chat-once-tty.txt');
+  const ttyText = await runCliTtyText({
+    cwd: projectDir,
+    env,
+    capturePath: ttyCapturePath,
+    label: 'obora chat --once --dry-run TTY',
+    args: [
+      'chat',
+      'judge.yaml',
+      '--dry-run',
+      '--session',
+      'smoke-chat-tty-session',
+      '--once',
+      'Check the workflow and summarize the execution.',
+    ],
+  });
+  if (ttyText) {
+    assert(
+      ttyText.includes('Dry-run completed. The workflow accepted this chat task.'),
+      'chat once TTY must render the dry-run assistant message',
+    );
+    assert(
+      ttyText.includes('last result completed 0/0'),
+      'chat once TTY must render dry-run last result metadata',
+    );
+    assert(
+      ttyText.includes('details /details dry-run-smoke-chat-tty-session-'),
+      'chat once TTY must render the dry-run details command',
+    );
+  }
 
   console.log('[PASS] Built CLI chat once smoke passed.');
 };
