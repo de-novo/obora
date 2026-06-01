@@ -68,6 +68,16 @@ const runCliJson = async ({ cwd, env, args, label }) => {
   return parseJsonOutput(label, stdout);
 };
 
+const runCliText = async ({ cwd, env, args, label }) => {
+  const { stdout, stderr } = await execFileAsync(process.execPath, [cliPath, ...args], {
+    cwd,
+    env,
+    maxBuffer: 1024 * 1024,
+  });
+  assert(stderr.trim().length === 0, `${label} wrote to stderr: ${stderr.trim()}`);
+  return stripAnsi(stdout);
+};
+
 const stripAnsi = (value) =>
   value
     .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/gu, '')
@@ -196,6 +206,33 @@ const verifyCliChatOnceSmoke = async (tmpDir) => {
   assert(
     persistedState.lastRunTask === chatTask,
     'show-session must preserve the original chat task',
+  );
+
+  const persistedText = await runCliText({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --show-session text',
+    args: ['chat', '--show-session', '--session', sessionId],
+  });
+  assert(
+    persistedText.includes(`Session ${sessionId}`),
+    'show-session text must identify the selected session',
+  );
+  assert(
+    persistedText.includes(`Retry: quickstart-judge -> ${chatTask}`),
+    'show-session text must expose the retry workflow and task',
+  );
+  assert(
+    persistedText.includes('Retry command: obora run judge.yaml'),
+    'show-session text must expose the retry command',
+  );
+  assert(
+    persistedText.includes(`- user`) && persistedText.includes(chatTask),
+    'show-session text must include recent chat messages',
+  );
+  assert(
+    !persistedText.includes('"sessionId"'),
+    'show-session text must not fall back to raw JSON without --json',
   );
 
   console.log('[PASS] Built CLI chat once smoke passed.');
