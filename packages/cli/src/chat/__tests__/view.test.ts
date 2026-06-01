@@ -419,7 +419,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("open /details exec-chat-1");
     expect(plain).toContain("viewing run exec-chat-1");
     expect(plain).toContain("open run completed 2/2 exec-chat-1");
-    expect(plain).toContain("/clear  /diff 1  /diff next  /retry 1");
+    expect(plain).toContain("/clear  /details 1  /retry 1  /details <runId>");
     expect(plain).toContain("/runs  /session  /project  /help");
   });
 
@@ -644,7 +644,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("path .obora/workflows/code-review.yaml");
     expect(plain).toContain("changed 1 file changed: modified review.md (+5/-2)");
     expect(plain).toContain("change root /repo/source-project");
-    expect(plain).toContain("diff focus /diff 1 /diff next /diff prev");
+    expect(plain).toContain("diff focus /diff open /diff 1 /diff next /diff prev");
     expect(plain).toContain("repository diff preview /repo/source-project");
     expect(plain).toContain("● #1 review.md M");
     expect(plain).toContain("selected diff #1 review.md");
@@ -653,7 +653,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("diff +new review");
     expect(plain).toContain("viewing run exec-inspected");
     expect(plain).toContain("viewing run exec-inspected  ·  /details exec-inspected");
-    expect(plain).toContain("/clear  /diff 1  /diff next  /retry 1");
+    expect(plain).toContain("/clear  /diff open  /diff 1  /diff next  /retry 1");
     expect(plain).toContain("#1 review completed");
     expect(plain).toContain("format text");
     expect(plain).toContain("method Direct repository inspection");

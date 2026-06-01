@@ -546,8 +546,36 @@ const inspectedRunFileChanges = (
 ): ReadonlyArray<WorkflowRunFileChange> =>
   state.inspectedRunSummary?.repositoryChanges?.files ?? [];
 
+const selectedRunFileChange = (
+  state: ChatSessionState
+): readonly [WorkflowRunFileChange, number] | undefined => {
+  const files = inspectedRunFileChanges(state);
+  const index =
+    files.length > 0 ? clampChoiceIndex(files, state.selectedRunFileChangeIndex) : undefined;
+  const file = index === undefined ? undefined : files[index];
+  return file && index !== undefined ? [file, index] : undefined;
+};
+
 const fileChangeIndexFromTarget = (target: string): number | undefined =>
   /^\d+$/u.test(target) ? Number.parseInt(target, 10) - 1 : undefined;
+
+const fileChangeStatText = (file: WorkflowRunFileChange): string | undefined =>
+  file.additions !== undefined || file.deletions !== undefined
+    ? `+${file.additions ?? 0}/-${file.deletions ?? 0}`
+    : undefined;
+
+const formatRunFileDiffMessage = (
+  file: WorkflowRunFileChange,
+  index: number
+): string =>
+  [
+    `Changed file ${index + 1}: ${file.path}`,
+    `Status: ${file.status}${fileChangeStatText(file) ? ` (${fileChangeStatText(file)})` : ""}`,
+    "Diff preview:",
+    ...(file.diffPreview && file.diffPreview.length > 0
+      ? file.diffPreview
+      : ["No diff preview recorded."]),
+  ].join("\n");
 
 const moveRunFileChangeSelection = (
   state: ChatSessionState,
@@ -579,9 +607,18 @@ const selectRunFileChange = (
 ): ChatTurnResult => {
   const files = inspectedRunFileChanges(state);
   const action = target === "next" || target === "prev" ? target : undefined;
+  const selected = target === "open" ? selectedRunFileChange(state) : undefined;
   const index = action ? undefined : fileChangeIndexFromTarget(target);
   return action
     ? moveRunFileChangeSelection(state, action)
+    : selected
+      ? {
+          state: appendAssistant(
+            state,
+            formatRunFileDiffMessage(selected[0], selected[1])
+          ),
+          exit: false,
+        }
     : index !== undefined && files[index]
       ? {
           state: appendAssistant(

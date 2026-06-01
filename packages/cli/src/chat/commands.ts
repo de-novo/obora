@@ -150,8 +150,8 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
     group: "details",
   },
   {
-    command: "/diff 1, /diff next, or /diff prev",
-    description: "focuses a changed file inside open run details",
+    command: "/diff 1, /diff next, /diff prev, or /diff open",
+    description: "focuses or opens a changed file diff from run details",
     group: "details",
   },
   {
@@ -204,20 +204,31 @@ export const chatHelp = [
 export const isClearRunDetailsCommand = (input: string): boolean =>
   input === "/clear" || input === "/details clear";
 
+const hasInspectedRunDiffChoices = (state: ChatSessionState): boolean =>
+  Boolean(state.inspectedRunSummary?.repositoryChanges?.files.length);
+
 export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<string> => {
   if (state.showHelpPanel) return ["/clear  /workflow <name>  /runs", "/session  /project  /exit"];
   if (state.inspectedRunSummary) {
-    return state.runChoices && state.runChoices.length > 0
-      ? [
-          "Enter open  Tab run  Left/Right diff  Esc close  Ctrl+R retry",
-          "/clear  /diff 1  /diff next  /retry 1",
+    return hasInspectedRunDiffChoices(state)
+      ? state.runChoices && state.runChoices.length > 0
+        ? [
+          "Enter run  o open diff  Left/Right diff  Esc close  Ctrl+R retry",
+          "/clear  /diff open  /diff 1  /diff next  /retry 1",
           "/runs  /session  /project  /help",
         ]
-      : [
-          "Left/Right diff  Esc close  Ctrl+R retry",
-          "/clear  /diff 1  /runs",
+        : [
+          "o open diff  Left/Right diff  Esc close  Ctrl+R retry",
+          "/clear  /diff open  /diff 1  /runs",
           "/session  /project  /help",
-        ];
+        ]
+      : state.runChoices && state.runChoices.length > 0
+        ? [
+            "Enter open  Tab next  Esc close  Ctrl+R retry",
+            "/clear  /details 1  /retry 1  /details <runId>",
+            "/runs  /session  /project  /help",
+          ]
+        : ["Esc close  Ctrl+R retry", "/clear  /runs  /details <runId>", "/session  /project  /help"];
   }
   if (state.runChoices && state.runChoices.length > 0) {
     return [

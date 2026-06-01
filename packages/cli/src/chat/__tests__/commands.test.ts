@@ -34,6 +34,15 @@ const runSummary: WorkflowRunSummary = {
   ],
 };
 
+const runSummaryWithChanges: WorkflowRunSummary = {
+  ...runSummary,
+  repositoryChanges: {
+    root: "/repo",
+    files: [{ status: "M", path: "README.md", diffPreview: ["-old", "+new"] }],
+    summary: "1 file changed: modified README.md",
+  },
+};
+
 describe("chat command metadata", () => {
   it("uses shared metadata for help and prompt hints", () => {
     const state = createInitialChatState({
@@ -119,8 +128,19 @@ describe("chat command metadata", () => {
         runChoices: [{ runSummary, sessionId: "session-a" }],
       })
     ).toEqual([
-      "Enter open  Tab run  Left/Right diff  Esc close  Ctrl+R retry",
-      "/clear  /diff 1  /diff next  /retry 1",
+      "Enter open  Tab next  Esc close  Ctrl+R retry",
+      "/clear  /details 1  /retry 1  /details <runId>",
+      "/runs  /session  /project  /help",
+    ]);
+    expect(
+      chatPromptCommandRows({
+        ...state,
+        inspectedRunSummary: runSummaryWithChanges,
+        runChoices: [{ runSummary: runSummaryWithChanges, sessionId: "session-a" }],
+      })
+    ).toEqual([
+      "Enter run  o open diff  Left/Right diff  Esc close  Ctrl+R retry",
+      "/clear  /diff open  /diff 1  /diff next  /retry 1",
       "/runs  /session  /project  /help",
     ]);
     expect(

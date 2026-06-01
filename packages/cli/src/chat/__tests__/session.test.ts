@@ -1257,6 +1257,13 @@ describe("chat session", () => {
       runWorkflow,
       commandOptions: {},
     });
+    const opened = await handleChatInput({
+      input: "/diff open",
+      state: selected.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: {},
+    });
 
     expect(selected.state.selectedRunFileChangeIndex).toBe(1);
     expect(selected.state.messages.at(-1)?.content).toBe(
@@ -1267,6 +1274,15 @@ describe("chat session", () => {
     expect(missing.state.selectedRunFileChangeIndex).toBe(0);
     expect(missing.state.messages.at(-1)?.content).toBe(
       "Changed file not found. Use /diff 1 or /diff next."
+    );
+    expect(opened.state.selectedRunFileChangeIndex).toBe(1);
+    expect(opened.state.messages.at(-1)?.content).toBe(
+      [
+        "Changed file 2: src/generated.js",
+        "Status: ??",
+        "Diff preview:",
+        "+console.log('generated');",
+      ].join("\n")
     );
   });
 
@@ -1293,6 +1309,16 @@ describe("chat session", () => {
       runWorkflow,
       commandOptions: {},
     });
+    const emptyOpen = await handleChatInput({
+      input: "/diff open",
+      state: {
+        ...baseState,
+        inspectedRunSummary: buildWorkflowRunSummary(executionResult),
+      },
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: {},
+    });
     const invalid = await handleChatInput({
       input: "/diff file",
       state: {
@@ -1301,7 +1327,7 @@ describe("chat session", () => {
           ...buildWorkflowRunSummary(executionResult),
           repositoryChanges: {
             root: "/repo",
-            files: [{ status: "M", path: "README.md" }],
+            files: [{ status: "M", path: "README.md", additions: 2, deletions: 1 }],
             summary: "1 file changed: modified README.md",
           },
         },
@@ -1317,8 +1343,27 @@ describe("chat session", () => {
     expect(empty.state.messages.at(-1)?.content).toBe(
       "No changed files are available in the open run details."
     );
+    expect(emptyOpen.state.messages.at(-1)?.content).toBe(
+      "No changed files are available in the open run details."
+    );
     expect(invalid.state.messages.at(-1)?.content).toBe(
       "Changed file not found. Use /diff 1 or /diff next."
+    );
+    const opened = await handleChatInput({
+      input: "/diff open",
+      state: invalid.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: {},
+    });
+
+    expect(opened.state.messages.at(-1)?.content).toBe(
+      [
+        "Changed file 1: README.md",
+        "Status: M (+2/-1)",
+        "Diff preview:",
+        "No diff preview recorded.",
+      ].join("\n")
     );
   });
 

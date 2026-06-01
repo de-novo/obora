@@ -129,7 +129,10 @@ describe("commandForChatTuiKey", () => {
 
     expect(commandForChatTuiKey(state, { name: "right" })).toBe("/diff next");
     expect(commandForChatTuiKey(state, { name: "left" })).toBe("/diff prev");
+    expect(commandForChatTuiKey(state, { name: "o" })).toBe("/diff open");
     expect(commandForChatTuiKey({ ...baseState, inspectedRunSummary: runSummary }, { name: "right" }))
+      .toBeUndefined();
+    expect(commandForChatTuiKey({ ...baseState, inspectedRunSummary: runSummary }, { name: "o" }))
       .toBeUndefined();
   });
 

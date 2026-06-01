@@ -55,6 +55,8 @@ const diffCommandForKey = (
       ? "/diff next"
       : key.name === "left"
         ? "/diff prev"
+        : key.name === "o"
+          ? "/diff open"
         : undefined
     : undefined;
 
