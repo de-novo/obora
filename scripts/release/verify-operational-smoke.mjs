@@ -942,6 +942,7 @@ const verifyCliChatTuiLayoutSmoke = async () => {
         },
       ],
       selectedRunChoiceIndex: 0,
+      inspectedRunSummary: runSummary,
       messages: [],
       runChoices: [
         {
@@ -966,9 +967,18 @@ const verifyCliChatTuiLayoutSmoke = async () => {
   );
   const plain = stripAnsi(lines.join('\n'));
   assert(plain.includes('retry layout-workflow'), 'TUI run history must keep retry value visible');
+  assert(plain.includes('state selected+open'), 'TUI run history must label the selected open run');
+  assert(
+    plain.includes('active close Esc retry Ctrl+R history /runs'),
+    'TUI run detail panel must show active keyboard actions',
+  );
+  assert(
+    plain.includes('Enter open  Tab next  Esc close  Ctrl+R retry'),
+    'TUI prompt must show picker keyboard shortcuts',
+  );
   assert(plain.includes('workflow open'), 'TUI workflow picker must show selected open command');
   assert(plain.includes('› ○ #1 layout-workflow'), 'TUI workflow picker must show selected row cursor');
-  assert(plain.includes('› ○ #1 exec-layout-1'), 'TUI run picker must show selected row cursor');
+  assert(plain.includes('› ● #1 exec-layout-1'), 'TUI run picker must show selected open row cursor');
   assert(plain.includes('layout-source-session'), 'TUI session picker must show saved sessions');
   assert(plain.includes('retryable'), 'TUI session picker must mark retryable sessions');
   assert(plain.includes('› ○ #1'), 'TUI session picker must show the selected row cursor');
