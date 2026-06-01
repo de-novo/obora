@@ -664,6 +664,7 @@ obora chat --show-run <executionId> [--session <id>]
 - `/workflow` shows the current workflow and the latest numbered choices from `/workflows`.
 - `/workflows` lists reusable project/global workflows, and `/workflows project` or `/workflows global` filters by scope.
 - After `/workflows`, `/workflow 1` selects a numbered workflow from the latest list and `/run #1 <task>` runs one task with it.
+- When a workflow, session, or run picker is open, `↑`/`↓` move the selected row and `Enter` opens it; after selecting a workflow, a plain chat message runs that workflow.
 - `/run <task>` runs the current workflow with an explicit task message.
 - `/run --workflow <name-or-path> <task>` runs one task with a different workflow without changing the session default.
 - `/details 1` or `/details <executionId>` shows recorded step outputs, tools, artifacts, decisions, and issues for a prior workflow result.
