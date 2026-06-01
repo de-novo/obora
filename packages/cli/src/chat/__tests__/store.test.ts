@@ -11,6 +11,7 @@ import {
   groupChatSessionSummaries,
   listChatRunDetails,
   listChatSessionSummaries,
+  listChatSessionStates,
   loadChatSessionState,
   renameChatSessionState,
   saveChatSessionState,
@@ -142,6 +143,13 @@ describe("chat session store", () => {
     await expect(
       listChatSessionSummaries({ cwd, projectRoot: join(cwd, "project-b") })
     ).resolves.toEqual([expect.objectContaining({ sessionId: "session-two" })]);
+    await expect(listChatSessionStates({ cwd, tag: "release" })).resolves.toEqual([
+      expect.objectContaining({
+        sessionId: "session-one",
+        projectRoot: join(cwd, "project-a"),
+        tags: ["release", "urgent"],
+      }),
+    ]);
   });
 
   it("renames and deletes persisted chat sessions", async () => {
@@ -187,6 +195,7 @@ describe("chat session store", () => {
 
     await expect(loadChatSessionState({ cwd, sessionId: "missing" })).resolves.toBeUndefined();
     await expect(listChatSessionSummaries({ cwd })).resolves.toEqual([]);
+    await expect(listChatSessionStates({ cwd })).resolves.toEqual([]);
   });
 
   it("ignores malformed session records while listing and hides them on load", async () => {

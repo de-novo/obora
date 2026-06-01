@@ -23,6 +23,7 @@ import {
   groupChatSessionSummaries,
   listChatRunDetails,
   listChatSessionSummaries,
+  listChatSessionStates,
   loadChatSessionState,
 } from "../chat/store.js";
 import type { ChatSessionGroupBy, ChatSessionSummaryGroup } from "../chat/store.js";
@@ -104,6 +105,46 @@ const saveChatSessionExport = (
     .then(() => resolvedPath);
 };
 
+interface ChatSessionExportBundle {
+  readonly schemaVersion: 1;
+  readonly exportedAt: string;
+  readonly storeRoot: string;
+  readonly filters: {
+    readonly tag?: string;
+    readonly projectRoot?: string;
+  };
+  readonly sessions: ReadonlyArray<ChatSessionState>;
+}
+
+const saveChatSessionBundle = ({
+  states,
+  storeCwd,
+  outputPath,
+  tag,
+  projectRoot,
+}: {
+  readonly states: ReadonlyArray<ChatSessionState>;
+  readonly storeCwd: string;
+  readonly outputPath: string;
+  readonly tag?: string;
+  readonly projectRoot?: string;
+}): Promise<string> => {
+  const resolvedPath = isAbsolute(outputPath) ? outputPath : resolve(storeCwd, outputPath);
+  const bundle: ChatSessionExportBundle = {
+    schemaVersion: 1,
+    exportedAt: new Date().toISOString(),
+    storeRoot: storeCwd,
+    filters: {
+      ...(tag ? { tag } : {}),
+      ...(projectRoot ? { projectRoot } : {}),
+    },
+    sessions: states,
+  };
+  return mkdir(dirname(resolvedPath), { recursive: true })
+    .then(() => writeFile(resolvedPath, `${JSON.stringify(bundle, null, 2)}\n`, "utf-8"))
+    .then(() => resolvedPath);
+};
+
 const sessionRetryColumn = (session: ChatSessionSummaryGroup["sessions"][number]): string =>
   session.lastRunTask && session.lastRunWorkflowName ? session.lastRunWorkflowName : "-";
 
@@ -141,6 +182,7 @@ export function createChatCommand(): Command {
     .option("--filter-run-status <status>", "Only list persisted workflow runs with the given status")
     .option("--show-session", "Show the persisted chat session selected by --session")
     .option("--save-session <path>", "With --show-session, save a chat session export to a file")
+    .option("--export-sessions <path>", "With --list-sessions, save matching sessions to a JSON bundle")
     .option("--list-runs", "List persisted workflow runs, optionally scoped by --session")
     .option("--show-run <executionId>", "Show a persisted workflow run summary by execution id")
     .option("--save-diff <path>", "With --show-run, save repository diff preview to a file")
@@ -176,14 +218,16 @@ export function createChatCommand(): Command {
               ExitCode.CLI_ERROR
             );
           }
+          if (options.exportSessions && !options.listSessions) {
+            throw new CLIError("--export-sessions requires --list-sessions", ExitCode.CLI_ERROR);
+          }
 
           if (options.listSessions) {
+            const selectedProjectRoot = filterProjectRoot(options.filterProject, storeCwd);
             const sessions = await listChatSessionSummaries({
               cwd: storeCwd,
               ...(options.filterTag ? { tag: options.filterTag } : {}),
-              ...(options.filterProject
-                ? { projectRoot: filterProjectRoot(options.filterProject, storeCwd) }
-                : {}),
+              ...(options.filterProject ? { projectRoot: selectedProjectRoot } : {}),
             });
             const groupBy = parseSessionGroupBy(options.groupSessions);
             const grouped = groupBy
@@ -195,9 +239,32 @@ export function createChatCommand(): Command {
                 ExitCode.CLI_ERROR
               );
             }
+            const exportSessionsPath = options.exportSessions;
+            const exportedSessionsPath = exportSessionsPath
+              ? await listChatSessionStates({
+                  cwd: storeCwd,
+                  ...(options.filterTag ? { tag: options.filterTag } : {}),
+                  ...(options.filterProject ? { projectRoot: selectedProjectRoot } : {}),
+                }).then((states) =>
+                  saveChatSessionBundle({
+                    states,
+                    storeCwd,
+                    outputPath: exportSessionsPath,
+                    ...(options.filterTag ? { tag: options.filterTag } : {}),
+                    ...(options.filterProject ? { projectRoot: selectedProjectRoot } : {}),
+                  })
+                )
+              : undefined;
             if (options.json || globalOpts.json) {
-              formatter.json(grouped ?? sessions);
+              formatter.json(
+                exportedSessionsPath
+                  ? { sessions: grouped ?? sessions, exportedSessionsPath }
+                  : grouped ?? sessions
+              );
             } else {
+              if (exportedSessionsPath) {
+                console.log(`Exported chat sessions: ${exportedSessionsPath}`);
+              }
               formatter.table(formatSessionTableRows(grouped ?? [{ group: "sessions", sessions }]));
             }
             return;

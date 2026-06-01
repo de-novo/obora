@@ -157,6 +157,7 @@ obora inspect <runId>
 obora --json inspect <runId>
 obora chat --list-sessions --filter-tag release
 obora chat --list-sessions --project /path/to/project --filter-project current
+obora chat --list-sessions --filter-tag release --export-sessions artifacts/release-sessions.json
 obora chat --show-session --session release-qa
 obora chat --show-session --session release-qa --save-session artifacts/session.md
 obora chat --list-runs --filter-tag release --filter-run-status completed --json
@@ -175,6 +176,7 @@ obora chat --session release-qa --once "/retry <executionId>"
 - `inspect`를 top-level alias로 바로 써서 특정 실행 상세 조회
 - local/root `--json`으로 같은 persisted-run inspection contract를 자동화에 연결
 - chat session 목록에서 project/workflow/retry/last task/tags/message count/updated time 확인
+- tag/project 필터가 적용된 chat session JSON bundle을 export해 재사용 가능한 세션을 백업·이관
 - `chat --show-session --session <id>` 기본 텍스트 출력으로 project, selected workflow, provider/model, retry target, retry command/options, 최근 메시지 확인
 - chat session에 저장된 workflow run 목록, saved message/workflow target/source project/retry workflow/run options, step별 output/tools/artifacts/decisions/dependencies/issues 상세
 - TUI 안에서는 `/runs`로 chat run 목록을 열고, `Tab`/`Shift+Tab`으로 선택을 이동하고, `Enter` 또는 `/details 1`로 번호 기반 상세를 확인하고, 변경 파일이 기록된 실행에서는 `/diff open` 또는 `/diff all`로 diff preview를 채팅 메시지에 펼치거나 `/diff save`, `/diff save <path>`로 파일에 저장하며, `Ctrl+R` 또는 `/retry 1`로 저장된 task를 재실행

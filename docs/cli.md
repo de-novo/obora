@@ -619,6 +619,7 @@ obora chat [workflow] --once <message> --dry-run
 obora chat --workflow <workflow> --session <id>
 obora chat --list-sessions [--json]
 obora chat --list-sessions --group-sessions project|tag|day [--filter-tag <tag>] [--filter-project <path|current>] [--json]
+obora chat --list-sessions --export-sessions <path> [--filter-tag <tag>] [--filter-project <path|current>] [--json]
 obora chat --show-session --session <id> [--json]
 obora chat --show-session --session <id> --save-session <path>
 obora chat --list-runs [--session <id>] [--filter-run-status <status>] [--filter-tag <tag>] [--filter-project <path|current>] [--json]
@@ -640,6 +641,7 @@ obora chat --show-run <executionId> --save-audit <path>
 - `--filter-project <path|current>` only list sessions for a project root; `current` resolves to the active lookup root, including `--project <path>` when provided
 - `--show-session` print a readable persisted chat session summary selected by `--session`; add `--json` for the raw saved state
 - `--save-session <path>` with `--show-session` writes a Markdown session export with metadata, messages, run summaries, and raw state
+- `--export-sessions <path>` with `--list-sessions` writes matching raw sessions to a JSON bundle, using the same tag/project filters as the list output
 - `--list-runs` list persisted workflow runs without starting the TUI, including saved task, retry target, and compact run options; with `--session`, search only that session
 - `--filter-run-status <queued|running|waiting|suspended|completed|failed|aborted>` only list persisted workflow runs with the given status
 - `--show-run <executionId>` print a persisted workflow run summary with step details and full saved run options; with `--session`, search only that session
@@ -663,6 +665,7 @@ obora chat --show-run <executionId> --save-audit <path>
 - New chat sessions store the resolved project root and optional comma-separated tags so session lists can be grouped by project, tag, or day.
 - Dry-run chat executions persist a completed `0/0` run summary with a `dry-run-...` execution id, so `--once --dry-run` results still show `last result`, appear on workflow result messages, and can be opened with `/details`.
 - `chat --list-sessions` text output shows project, selected workflow, retry workflow, last task, tags, message count, and updated time so reusable sessions can be picked without opening raw JSON.
+- `chat --list-sessions --export-sessions <path>` writes a JSON bundle with schema version, export timestamp, store root, filters, and matching raw session states; relative paths resolve from the active chat store root, including `--project <path>`.
 - `chat --show-session --session <id>` text output summarizes project, tags, workflow, provider/model, retry target, retry command, retry options, last result, details link, and recent messages; `--json` preserves the raw session state for automation.
 - Persisted run summaries expose the saved chat message, workflow target, source project, retry workflow, run options, step-level status, agent, model, output preview, tools, artifacts, decisions, dependencies, and issues through `--show-run`; add `--json` for the raw persisted detail object.
 - `/runs` and `chat --list-runs` use compact run-option text such as `provider openrouter · model openrouter/owl-alpha · timeout 2500ms · files+3`; `--show-run` keeps full `config`, `agents`, and `policy` paths for audit.
@@ -700,6 +703,7 @@ obora chat --workflow ~/.obora/workflows/code-review.yaml --session review-sessi
 obora chat release-readiness --model openrouter/owl-alpha
 obora chat release-readiness --session release-qa --tags release,qa
 obora chat --list-sessions --group-sessions tag --filter-tag release --json
+obora chat --list-sessions --filter-tag release --export-sessions artifacts/release-sessions.json
 obora chat --show-session --session release-qa
 obora chat --show-session --session release-qa --json
 obora chat --list-runs --session release-qa

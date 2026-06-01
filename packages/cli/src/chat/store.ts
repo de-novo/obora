@@ -279,6 +279,26 @@ export const listChatSessionSummaries = async ({
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     );
 
+export const listChatSessionStates = async ({
+  cwd,
+  tag,
+  projectRoot,
+  storeDir = chatSessionStoreDir(cwd),
+}: {
+  readonly cwd: string;
+  readonly tag?: string;
+  readonly projectRoot?: string;
+  readonly storeDir?: string;
+}): Promise<ReadonlyArray<ChatSessionState>> =>
+  listChatSessionRecords(storeDir)
+    .then((records) =>
+      records
+        .filter(filterRecordByTag(tag))
+        .filter(filterRecordByProject(projectRoot))
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+        .map((record) => record.state)
+    );
+
 const sessionGroupKeys = (
   summary: ChatSessionSummary,
   groupBy: ChatSessionGroupBy,

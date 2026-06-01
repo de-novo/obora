@@ -8,6 +8,7 @@ import {
   groupChatSessionSummaries,
   listChatRunDetails,
   listChatSessionSummaries,
+  listChatSessionStates,
   loadChatSessionState,
 } from "../../chat/store.js";
 import { createCLI } from "../../cli.js";
@@ -23,6 +24,7 @@ vi.mock("../../chat/store.js", () => ({
   groupChatSessionSummaries: vi.fn((sessions) => [{ group: "/repo", sessions }]),
   listChatRunDetails: vi.fn(),
   listChatSessionSummaries: vi.fn(),
+  listChatSessionStates: vi.fn(),
   loadChatSessionState: vi.fn(),
 }));
 
@@ -268,6 +270,101 @@ describe("chat command", () => {
 
     expect(listChatSessionSummaries).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: "/repo/project-store", projectRoot: "/repo/project-store" })
+    );
+  });
+
+  it("exports listed chat sessions to a project-relative JSON bundle", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-chat-export-sessions-"));
+    vi.mocked(listChatSessionSummaries).mockResolvedValue([
+      {
+        sessionId: "session-a",
+        status: "ready",
+        cwd: dir,
+        projectRoot: join(dir, "project-a"),
+        tags: ["release"],
+        messageCount: 1,
+        updatedAt: "2026-05-24T00:00:00.000Z",
+      },
+    ]);
+    vi.mocked(listChatSessionStates).mockResolvedValue([
+      {
+        sessionId: "session-a",
+        status: "ready",
+        cwd: dir,
+        projectRoot: join(dir, "project-a"),
+        tags: ["release"],
+        messages: [
+          {
+            id: "user:1",
+            role: "user",
+            content: "prepare release",
+            createdAt: "2026-05-24T00:00:00.000Z",
+          },
+        ],
+      },
+    ]);
+
+    await createChatCommand().parseAsync(
+      [
+        "--list-sessions",
+        "--project",
+        dir,
+        "--filter-tag",
+        "release",
+        "--filter-project",
+        join(dir, "project-a"),
+        "--export-sessions",
+        "exports/sessions.json",
+      ],
+      { from: "user" }
+    );
+
+    const outputPath = join(dir, "exports", "sessions.json");
+    const bundle = JSON.parse(await readFile(outputPath, "utf-8")) as {
+      readonly schemaVersion: number;
+      readonly storeRoot: string;
+      readonly filters: { readonly tag?: string; readonly projectRoot?: string };
+      readonly sessions: ReadonlyArray<{ readonly sessionId: string }>;
+    };
+    expect(listChatSessionStates).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: dir,
+        tag: "release",
+        projectRoot: join(dir, "project-a"),
+      })
+    );
+    expect(bundle).toMatchObject({
+      schemaVersion: 1,
+      storeRoot: dir,
+      filters: {
+        tag: "release",
+        projectRoot: join(dir, "project-a"),
+      },
+      sessions: [{ sessionId: "session-a" }],
+    });
+    expect(console.log).toHaveBeenCalledWith(`Exported chat sessions: ${outputPath}`);
+  });
+
+  it("includes the exported session bundle path in JSON list output", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-chat-export-sessions-json-"));
+    vi.mocked(listChatSessionSummaries).mockResolvedValue([]);
+    vi.mocked(listChatSessionStates).mockResolvedValue([]);
+
+    await createChatCommand().parseAsync(
+      [
+        "--list-sessions",
+        "--project",
+        dir,
+        "--export-sessions",
+        "exports/sessions.json",
+        "--json",
+      ],
+      { from: "user" }
+    );
+
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"exportedSessionsPath"'));
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining(join(dir, "exports", "sessions.json"))
     );
   });
 
@@ -891,6 +988,16 @@ describe("chat command", () => {
 
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining("--save-session requires --show-session --session <id>")
+    );
+  });
+
+  it("requires --list-sessions before exporting chat sessions", async () => {
+    await createChatCommand().parseAsync(["--export-sessions", "exports/sessions.json"], {
+      from: "user",
+    });
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("--export-sessions requires --list-sessions")
     );
   });
 
