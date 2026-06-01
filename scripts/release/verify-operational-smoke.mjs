@@ -163,7 +163,18 @@ const verifyCliChatOnceSmoke = async (tmpDir) => {
     cwd: projectDir,
     env,
     label: 'obora chat --once --dry-run --json',
-    args: ['--json', 'chat', 'judge.yaml', '--dry-run', '--session', sessionId, '--once', chatTask],
+    args: [
+      '--json',
+      'chat',
+      'judge.yaml',
+      '--dry-run',
+      '--session',
+      sessionId,
+      '--tags',
+      'smoke,release',
+      '--once',
+      chatTask,
+    ],
   });
   assert(finalState.sessionId === sessionId, 'chat once JSON must preserve the requested session id');
   assert(finalState.status === 'ready', 'chat once dry-run must leave the session ready');
@@ -216,6 +227,23 @@ const verifyCliChatOnceSmoke = async (tmpDir) => {
   assert(
     sessionsText.includes(chatTask),
     'chat session list text must include the saved chat task',
+  );
+
+  const groupedSessionsText = await runCliText({
+    cwd: projectDir,
+    env,
+    label: 'obora chat --list-sessions grouped text',
+    args: ['chat', '--list-sessions', '--group-sessions', 'tag', '--filter-tag', 'smoke'],
+  });
+  assert(
+    groupedSessionsText.includes('group') &&
+      groupedSessionsText.includes('smoke') &&
+      groupedSessionsText.includes(sessionId),
+    'chat grouped session list text must include the tag group and saved session id',
+  );
+  assert(
+    groupedSessionsText.includes('quickstart-judge') && groupedSessionsText.includes(chatTask),
+    'chat grouped session list text must preserve retry workflow and task metadata',
   );
 
   const persistedState = await runCliJson({
