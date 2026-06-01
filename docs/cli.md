@@ -620,6 +620,7 @@ obora chat --workflow <workflow> --session <id>
 obora chat --list-sessions [--json]
 obora chat --list-sessions --group-sessions project|tag|day [--filter-tag <tag>] [--filter-project <path|current>] [--json]
 obora chat --show-session --session <id> [--json]
+obora chat --show-session --session <id> --save-session <path>
 obora chat --list-runs [--session <id>] [--filter-run-status <status>] [--filter-tag <tag>] [--filter-project <path|current>] [--json]
 obora chat --show-run <executionId> [--session <id>]
 obora chat --show-run <executionId> --save-diff <path>
@@ -630,7 +631,7 @@ obora chat --show-run <executionId> --save-audit <path>
 
 - `--workflow <workflow>` workflow name or YAML path; overrides the positional workflow
 - `--scope <project|global|all>` resolve workflow names from project/global workflow roots
-- `--project <path>` project root for scoped workflow discovery
+- `--project <path>` project root for scoped workflow discovery and persisted chat session/run lookup
 - `--global-workflows-dir <path>` global workflow directory override
 - `--session <id>` stable chat session id
 - `--list-sessions` list persisted chat sessions without starting the TUI
@@ -638,6 +639,7 @@ obora chat --show-run <executionId> --save-audit <path>
 - `--filter-tag <tag>` only list sessions with the given tag
 - `--filter-project <path|current>` only list sessions for a project root; `current` resolves to the active lookup root, including `--project <path>` when provided
 - `--show-session` print a readable persisted chat session summary selected by `--session`; add `--json` for the raw saved state
+- `--save-session <path>` with `--show-session` writes a Markdown session export with metadata, messages, run summaries, and raw state
 - `--list-runs` list persisted workflow runs without starting the TUI, including saved task, retry target, and compact run options; with `--session`, search only that session
 - `--filter-run-status <queued|running|waiting|suspended|completed|failed|aborted>` only list persisted workflow runs with the given status
 - `--show-run <executionId>` print a persisted workflow run summary with step details and full saved run options; with `--session`, search only that session

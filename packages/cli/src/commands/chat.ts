@@ -9,7 +9,10 @@ import {
   formatChatRunDetail,
   formatChatRunDiffPreview,
 } from "../chat/run-detail-format.js";
-import { formatChatSessionDetail } from "../chat/session-detail-format.js";
+import {
+  formatChatSessionDetail,
+  formatChatSessionExport,
+} from "../chat/session-detail-format.js";
 import {
   formatCompactChatRunOptions,
   formatChatRunOptionsOrDefault,
@@ -24,6 +27,7 @@ import {
 } from "../chat/store.js";
 import type { ChatSessionGroupBy, ChatSessionSummaryGroup } from "../chat/store.js";
 import type { ChatRunDetail } from "../chat/store.js";
+import type { ChatSessionState } from "../chat/types.js";
 import type { ChatCommandOptions } from "../chat/types.js";
 import { CLIError } from "../utils/cli-error.js";
 import { handleCommandAction } from "../utils/error-handler.js";
@@ -87,6 +91,19 @@ const saveChatRunAuditBundle = (
 ): Promise<string> =>
   saveChatRunOutput(detail, baseCwd, outputPath, formatChatRunAuditBundle(detail));
 
+const saveChatSessionExport = (
+  state: ChatSessionState,
+  baseCwd: string,
+  outputPath: string
+): Promise<string> => {
+  const resolvedPath = isAbsolute(outputPath)
+    ? outputPath
+    : resolve(state.projectRoot ?? baseCwd, outputPath);
+  return mkdir(dirname(resolvedPath), { recursive: true })
+    .then(() => writeFile(resolvedPath, formatChatSessionExport(state), "utf-8"))
+    .then(() => resolvedPath);
+};
+
 const sessionRetryColumn = (session: ChatSessionSummaryGroup["sessions"][number]): string =>
   session.lastRunTask && session.lastRunWorkflowName ? session.lastRunWorkflowName : "-";
 
@@ -123,6 +140,7 @@ export function createChatCommand(): Command {
     .option("--filter-project <path>", "Only list sessions for a project root, or current")
     .option("--filter-run-status <status>", "Only list persisted workflow runs with the given status")
     .option("--show-session", "Show the persisted chat session selected by --session")
+    .option("--save-session <path>", "With --show-session, save a chat session export to a file")
     .option("--list-runs", "List persisted workflow runs, optionally scoped by --session")
     .option("--show-run <executionId>", "Show a persisted workflow run summary by execution id")
     .option("--save-diff <path>", "With --show-run, save repository diff preview to a file")
@@ -151,6 +169,12 @@ export function createChatCommand(): Command {
           }
           if (options.saveAudit && !options.showRun) {
             throw new CLIError("--save-audit requires --show-run <executionId>", ExitCode.CLI_ERROR);
+          }
+          if (options.saveSession && !options.showSession) {
+            throw new CLIError(
+              "--save-session requires --show-session --session <id>",
+              ExitCode.CLI_ERROR
+            );
           }
 
           if (options.listSessions) {
@@ -190,9 +214,15 @@ export function createChatCommand(): Command {
             if (!state) {
               throw new CLIError(`Chat session not found: ${options.session}`, ExitCode.CLI_ERROR);
             }
+            const savedSessionPath = options.saveSession
+              ? await saveChatSessionExport(state, storeCwd, options.saveSession)
+              : undefined;
             if (options.json || globalOpts.json) {
-              formatter.json(state);
+              formatter.json(savedSessionPath ? { ...state, savedSessionPath } : state);
             } else {
+              if (savedSessionPath) {
+                console.log(`Saved chat session export: ${savedSessionPath}`);
+              }
               console.log(formatChatSessionDetail(state));
             }
             return;

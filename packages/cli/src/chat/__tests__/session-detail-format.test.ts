@@ -1,7 +1,10 @@
 import type { WorkflowLocator, WorkflowRunSummary } from "@obora/sdk";
 import { describe, expect, it } from "vitest";
 
-import { formatChatSessionDetail } from "../session-detail-format.js";
+import {
+  formatChatSessionDetail,
+  formatChatSessionExport,
+} from "../session-detail-format.js";
 import type { ChatMessage, ChatSessionState } from "../types.js";
 
 const locator: WorkflowLocator = {
@@ -88,5 +91,47 @@ describe("formatChatSessionDetail", () => {
     expect(detail).toContain(`${"x".repeat(93)}...`);
     expect(detail).not.toContain("oldest hidden");
     expect(detail).not.toContain(longMessage);
+  });
+
+  it("formats a full session export with messages, run summaries, and raw state", () => {
+    const state: ChatSessionState = {
+      sessionId: "release-session",
+      status: "ready",
+      cwd: "/repo",
+      projectRoot: "/repo/current-project",
+      tags: ["release"],
+      dryRun: false,
+      providerName: "openrouter",
+      modelName: "openrouter/owl-alpha",
+      workflowLocator: locator,
+      messages: [
+        message("0", "user", "prepare release"),
+        {
+          ...message("1", "assistant", "Workflow completed."),
+          runTask: "prepare release",
+          runSummary,
+        },
+      ],
+      lastRunTask: "prepare release",
+      lastRunWorkflowLocator: locator,
+      lastRunSummary: runSummary,
+    };
+
+    const text = formatChatSessionExport(state);
+
+    expect(text).toContain("# Chat Session Export");
+    expect(text).toContain("Session: release-session");
+    expect(text).toContain("Project: /repo/current-project");
+    expect(text).toContain("Workflow: release-readiness (project)");
+    expect(text).toContain("## Messages");
+    expect(text).toContain("### 1. user");
+    expect(text).toContain("prepare release");
+    expect(text).toContain("### 2. assistant");
+    expect(text).toContain("Run: exec-session");
+    expect(text).toContain("Task: prepare release");
+    expect(text).toContain("## Latest Run");
+    expect(text).toContain("- Execution: exec-session");
+    expect(text).toContain("## Raw State");
+    expect(text).toContain('"sessionId": "release-session"');
   });
 });

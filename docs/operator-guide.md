@@ -158,6 +158,7 @@ obora --json inspect <runId>
 obora chat --list-sessions --filter-tag release
 obora chat --list-sessions --project /path/to/project --filter-project current
 obora chat --show-session --session release-qa
+obora chat --show-session --session release-qa --save-session artifacts/session.md
 obora chat --list-runs --filter-tag release --filter-run-status completed --json
 obora chat --list-runs --project /path/to/project --filter-project current --json
 obora chat --show-run <executionId> --session release-qa

@@ -378,6 +378,78 @@ describe("chat command", () => {
     );
   });
 
+  it("saves a persisted chat session export", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-chat-show-session-export-"));
+    const outputPath = join(dir, "exports", "session.md");
+    vi.mocked(loadChatSessionState).mockResolvedValue({
+      sessionId: "session-a",
+      status: "ready",
+      cwd: dir,
+      projectRoot: dir,
+      dryRun: false,
+      workflowTarget: "release-readiness",
+      messages: [
+        {
+          id: "user:1",
+          role: "user",
+          content: "prepare release",
+          createdAt: "2026-05-24T00:00:00.000Z",
+        },
+      ],
+      lastRunSummary: {
+        executionId: "exec-session",
+        workflowName: "release-readiness",
+        status: "completed",
+        startedAt: "2026-05-24T00:00:00.000Z",
+        completedStepCount: 1,
+        totalStepCount: 1,
+        message: "Workflow completed: 1/1 steps completed.",
+        steps: [],
+      },
+    });
+
+    await createChatCommand().parseAsync(
+      ["--show-session", "--session", "session-a", "--save-session", "exports/session.md"],
+      { from: "user" }
+    );
+
+    await expect(readFile(outputPath, "utf-8")).resolves.toContain("# Chat Session Export");
+    await expect(readFile(outputPath, "utf-8")).resolves.toContain("prepare release");
+    expect(console.log).toHaveBeenCalledWith(`Saved chat session export: ${outputPath}`);
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Session session-a"));
+  });
+
+  it("includes the saved session export path in JSON show-session output", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-chat-show-session-export-json-"));
+    vi.mocked(loadChatSessionState).mockResolvedValue({
+      sessionId: "session-a",
+      status: "ready",
+      cwd: dir,
+      dryRun: false,
+      workflowTarget: "release-readiness",
+      messages: [],
+    });
+
+    await createChatCommand().parseAsync(
+      [
+        "--show-session",
+        "--session",
+        "session-a",
+        "--project",
+        dir,
+        "--save-session",
+        "exports/session.md",
+        "--json",
+      ],
+      { from: "user" }
+    );
+
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"savedSessionPath"'));
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining(join(dir, "exports", "session.md"))
+    );
+  });
+
   it("shows a persisted chat run selected by execution id", async () => {
     vi.mocked(findChatRunDetail).mockResolvedValue({
       sessionId: "session-a",
@@ -809,6 +881,16 @@ describe("chat command", () => {
 
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining("--save-audit requires --show-run <executionId>")
+    );
+  });
+
+  it("requires --show-session before saving a chat session export", async () => {
+    await createChatCommand().parseAsync(["--save-session", "exports/session.md"], {
+      from: "user",
+    });
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("--save-session requires --show-session --session <id>")
     );
   });
 
