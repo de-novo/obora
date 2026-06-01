@@ -34,17 +34,32 @@ import { getGlobalOpts } from "../utils/global-opts.js";
 const parseSessionGroupBy = (value: string | undefined): ChatSessionGroupBy | undefined =>
   value === "project" || value === "tag" || value === "day" ? value : undefined;
 
-const saveDiffOutputPath = (detail: ChatRunDetail, outputPath: string): string =>
+const resolveFromCommandCwd = (path: string): string => resolve(process.cwd(), path);
+
+const chatStoreCwd = (options: ChatCommandOptions): string =>
+  options.project ? resolveFromCommandCwd(options.project) : process.cwd();
+
+const filterProjectRoot = (
+  value: string | undefined,
+  storeCwd: string
+): string | undefined => (value === "current" ? storeCwd : value);
+
+const saveDiffOutputPath = (
+  detail: ChatRunDetail,
+  baseCwd: string,
+  outputPath: string
+): string =>
   isAbsolute(outputPath)
     ? outputPath
-    : resolve(detail.projectRoot ?? process.cwd(), outputPath);
+    : resolve(detail.projectRoot ?? baseCwd, outputPath);
 
 const saveChatRunOutput = async (
   detail: ChatRunDetail,
+  baseCwd: string,
   outputPath: string,
   body: string
 ): Promise<string> => {
-  const resolvedPath = saveDiffOutputPath(detail, outputPath);
+  const resolvedPath = saveDiffOutputPath(detail, baseCwd, outputPath);
   await mkdir(dirname(resolvedPath), { recursive: true });
   await writeFile(resolvedPath, body, "utf-8");
   return resolvedPath;
@@ -52,6 +67,7 @@ const saveChatRunOutput = async (
 
 const saveChatRunDiffPreview = async (
   detail: ChatRunDetail,
+  baseCwd: string,
   outputPath: string
 ): Promise<string> => {
   const body = formatChatRunDiffPreview(detail);
@@ -61,13 +77,15 @@ const saveChatRunDiffPreview = async (
       ExitCode.CLI_ERROR
     );
   }
-  return saveChatRunOutput(detail, outputPath, body);
+  return saveChatRunOutput(detail, baseCwd, outputPath, body);
 };
 
 const saveChatRunAuditBundle = (
   detail: ChatRunDetail,
+  baseCwd: string,
   outputPath: string
-): Promise<string> => saveChatRunOutput(detail, outputPath, formatChatRunAuditBundle(detail));
+): Promise<string> =>
+  saveChatRunOutput(detail, baseCwd, outputPath, formatChatRunAuditBundle(detail));
 
 const sessionRetryColumn = (session: ChatSessionSummaryGroup["sessions"][number]): string =>
   session.lastRunTask && session.lastRunWorkflowName ? session.lastRunWorkflowName : "-";
@@ -127,6 +145,7 @@ export function createChatCommand(): Command {
       const globalOpts = getGlobalOpts(this);
       await handleCommandAction(
         async () => {
+          const storeCwd = chatStoreCwd(options);
           if (options.saveDiff && !options.showRun) {
             throw new CLIError("--save-diff requires --show-run <executionId>", ExitCode.CLI_ERROR);
           }
@@ -136,13 +155,10 @@ export function createChatCommand(): Command {
 
           if (options.listSessions) {
             const sessions = await listChatSessionSummaries({
-              cwd: process.cwd(),
+              cwd: storeCwd,
               ...(options.filterTag ? { tag: options.filterTag } : {}),
               ...(options.filterProject
-                ? {
-                    projectRoot:
-                      options.filterProject === "current" ? process.cwd() : options.filterProject,
-                  }
+                ? { projectRoot: filterProjectRoot(options.filterProject, storeCwd) }
                 : {}),
             });
             const groupBy = parseSessionGroupBy(options.groupSessions);
@@ -168,7 +184,7 @@ export function createChatCommand(): Command {
               throw new CLIError("--show-session requires --session <id>", ExitCode.CLI_ERROR);
             }
             const state = await loadChatSessionState({
-              cwd: process.cwd(),
+              cwd: storeCwd,
               sessionId: options.session,
             });
             if (!state) {
@@ -190,14 +206,11 @@ export function createChatCommand(): Command {
               );
             }
             const runs = await listChatRunDetails({
-              cwd: process.cwd(),
+              cwd: storeCwd,
               ...(options.session ? { sessionId: options.session } : {}),
               ...(options.filterTag ? { tag: options.filterTag } : {}),
               ...(options.filterProject
-                ? {
-                    projectRoot:
-                      options.filterProject === "current" ? process.cwd() : options.filterProject,
-                  }
+                ? { projectRoot: filterProjectRoot(options.filterProject, storeCwd) }
                 : {}),
               ...(options.filterRunStatus ? { status: options.filterRunStatus } : {}),
             });
@@ -226,7 +239,7 @@ export function createChatCommand(): Command {
 
           if (options.showRun) {
             const detail = await findChatRunDetail({
-              cwd: process.cwd(),
+              cwd: storeCwd,
               executionId: options.showRun,
               ...(options.session ? { sessionId: options.session } : {}),
             });
@@ -234,10 +247,10 @@ export function createChatCommand(): Command {
               throw new CLIError(`Chat run not found: ${options.showRun}`, ExitCode.CLI_ERROR);
             }
             const savedDiffPath = options.saveDiff
-              ? await saveChatRunDiffPreview(detail, options.saveDiff)
+              ? await saveChatRunDiffPreview(detail, storeCwd, options.saveDiff)
               : undefined;
             const savedAuditPath = options.saveAudit
-              ? await saveChatRunAuditBundle(detail, options.saveAudit)
+              ? await saveChatRunAuditBundle(detail, storeCwd, options.saveAudit)
               : undefined;
             if (options.json || globalOpts.json) {
               formatter.json(

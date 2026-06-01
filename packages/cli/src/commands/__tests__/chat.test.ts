@@ -238,6 +238,39 @@ describe("chat command", () => {
     );
   });
 
+  it("uses --project as the persisted chat session store root", async () => {
+    vi.mocked(listChatSessionSummaries).mockResolvedValue([]);
+
+    await createChatCommand().parseAsync(
+      ["--list-sessions", "--project", "/repo/project-store", "--json"],
+      { from: "user" }
+    );
+
+    expect(listChatSessionSummaries).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: "/repo/project-store" })
+    );
+  });
+
+  it("resolves the current project filter from the --project store root", async () => {
+    vi.mocked(listChatSessionSummaries).mockResolvedValue([]);
+
+    await createChatCommand().parseAsync(
+      [
+        "--list-sessions",
+        "--project",
+        "/repo/project-store",
+        "--filter-project",
+        "current",
+        "--json",
+      ],
+      { from: "user" }
+    );
+
+    expect(listChatSessionSummaries).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: "/repo/project-store", projectRoot: "/repo/project-store" })
+    );
+  });
+
   it("fails clearly for invalid chat session grouping", async () => {
     vi.mocked(listChatSessionSummaries).mockResolvedValue([]);
 
@@ -323,6 +356,26 @@ describe("chat command", () => {
 
     expect(runChatSession).not.toHaveBeenCalled();
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"sessionId": "session-a"'));
+  });
+
+  it("uses --project when showing a persisted chat session", async () => {
+    vi.mocked(loadChatSessionState).mockResolvedValue({
+      sessionId: "session-a",
+      status: "ready",
+      cwd: "/repo/project-store",
+      dryRun: false,
+      workflowTarget: "release-readiness",
+      messages: [],
+    });
+
+    await createChatCommand().parseAsync(
+      ["--show-session", "--session", "session-a", "--project", "/repo/project-store", "--json"],
+      { from: "user" }
+    );
+
+    expect(loadChatSessionState).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: "/repo/project-store", sessionId: "session-a" })
+    );
   });
 
   it("shows a persisted chat run selected by execution id", async () => {
@@ -623,6 +676,33 @@ describe("chat command", () => {
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"savedAuditPath"'));
   });
 
+  it("uses --project when showing a persisted chat run", async () => {
+    vi.mocked(findChatRunDetail).mockResolvedValue({
+      sessionId: "session-a",
+      messageId: "assistant:run",
+      messageCreatedAt: "2026-05-24T00:00:01.000Z",
+      runSummary: {
+        executionId: "exec-project",
+        workflowName: "release-readiness",
+        status: "completed",
+        startedAt: "2026-05-24T00:00:00.000Z",
+        completedStepCount: 0,
+        totalStepCount: 0,
+        message: "Workflow completed: 0/0 steps completed.",
+        steps: [],
+      },
+    });
+
+    await createChatCommand().parseAsync(
+      ["--show-run", "exec-project", "--project", "/repo/project-store", "--json"],
+      { from: "user" }
+    );
+
+    expect(findChatRunDetail).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: "/repo/project-store", executionId: "exec-project" })
+    );
+  });
+
   it("saves a relative audit bundle path from the current directory without project metadata", async () => {
     const dir = await mkdtemp(join(tmpdir(), "obora-chat-show-run-audit-cwd-"));
     const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(dir);
@@ -918,6 +998,26 @@ describe("chat command", () => {
         tag: "release",
         status: "failed",
       })
+    );
+  });
+
+  it("uses --project when listing persisted chat runs", async () => {
+    vi.mocked(listChatRunDetails).mockResolvedValue([]);
+
+    await createChatCommand().parseAsync(
+      [
+        "--list-runs",
+        "--project",
+        "/repo/project-store",
+        "--filter-project",
+        "current",
+        "--json",
+      ],
+      { from: "user" }
+    );
+
+    expect(listChatRunDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: "/repo/project-store", projectRoot: "/repo/project-store" })
     );
   });
 

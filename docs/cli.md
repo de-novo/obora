@@ -564,7 +564,7 @@ obora --json judge [workflow]
 - `--dry-run` validate only (no execution) and print resolution/binding/output previews when available
 - `--timeout <ms>` execution timeout in milliseconds (positive integer only)
 - `--scope <project|global|all>` resolve bare workflow names from project/global workflow roots
-- `--project <path>` project root for scoped workflow discovery
+- `--project <path>` project root for scoped workflow discovery and persisted chat session/run lookup
 - `--global-workflows-dir <path>` global workflow directory override
 
 ### Examples
@@ -636,7 +636,7 @@ obora chat --show-run <executionId> --save-audit <path>
 - `--list-sessions` list persisted chat sessions without starting the TUI
 - `--group-sessions <project|tag|day>` group listed sessions by project root, tag, or updated day
 - `--filter-tag <tag>` only list sessions with the given tag
-- `--filter-project <path|current>` only list sessions for a project root
+- `--filter-project <path|current>` only list sessions for a project root; `current` resolves to the active lookup root, including `--project <path>` when provided
 - `--show-session` print a readable persisted chat session summary selected by `--session`; add `--json` for the raw saved state
 - `--list-runs` list persisted workflow runs without starting the TUI, including saved task, retry target, and compact run options; with `--session`, search only that session
 - `--filter-run-status <queued|running|waiting|suspended|completed|failed|aborted>` only list persisted workflow runs with the given status

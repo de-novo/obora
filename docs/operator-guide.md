@@ -156,8 +156,10 @@ obora --json runs list --workflow judge
 obora inspect <runId>
 obora --json inspect <runId>
 obora chat --list-sessions --filter-tag release
+obora chat --list-sessions --project /path/to/project --filter-project current
 obora chat --show-session --session release-qa
 obora chat --list-runs --filter-tag release --filter-run-status completed --json
+obora chat --list-runs --project /path/to/project --filter-project current --json
 obora chat --show-run <executionId> --session release-qa
 obora chat --show-run <executionId> --save-diff artifacts/run.diff.md
 obora chat --show-run <executionId> --save-audit artifacts/run.audit.md
